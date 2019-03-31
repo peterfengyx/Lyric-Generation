@@ -51,9 +51,9 @@ class LyricEncoder(nn.Module):
     def initHidden(self):
         return torch.zeros(1, 1, self.hidden_size, device=device)
 
-class LyricDecoder(nn.Module):
+class LyricGenerator(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
-        super(LyricDecoder, self).__init__()
+        super(LyricGenerator, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         # self.embedding = nn.Embedding(output_size, hidden_size)
@@ -72,9 +72,9 @@ class LyricDecoder(nn.Module):
     def initHidden(self):
         return torch.zeros(1, 1, self.hidden_size, device=device)
 
-class SentenceDecoder(nn.Module):
+class SentenceGenerator(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
-        super(SentenceDecoder, self).__init__()
+        super(SentenceGenerator, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         # self.embedding = nn.Embedding(output_size, hidden_size)
