@@ -69,11 +69,21 @@ class DataLoader:
                 pad.append(temp)
             pad_lyrics.append(pad)
         return pad_lyrics
-            
+    
+    def count_number(self):
+        t={}
+        for i in self.data:
+            try:
+                t[i[1]]+=1
+            except:
+                t[i[1]]=1
+        return t
 
 
-
-d=DataLoader()
+d=DataLoader(tn_name='125')
+d.gen_training_set(types=[1,2,5])
+print(d.count_number())
+#types={'Hip-Hop':0, 'Metal':1, 'Country':2, 'Jazz':3, 'Electronic':4, 'R&B':5}
 #data[][0]: title; data[][1]: genre; data[][2]: lyrics; data[][3]: length
 #title=d.tn_set[:,0]
 #w2v[1]
