@@ -20,12 +20,12 @@ UNK = 9745
 # maximum line length
 MaxLineLen = 32 
 # maximum lyric length
-MaxLyricLen = 40 # Need to be reset
+MaxLineNum = 40 # Need to be reset
 
 # pdb.set_trace()
 
 class LyricDataset(data_utils.Dataset):
-    def __init__(self, lyric_set, max_line_num = MaxLyricLen):
+    def __init__(self, lyric_set, max_line_num = MaxLineNum):
         self.lyric_set = lyric_set
         self.max_line_num = max_line_num
         self.len = len(lyric_set)
@@ -39,19 +39,22 @@ class LyricDataset(data_utils.Dataset):
         lyric = self.lyric_set[index][2]
         line_length = self.lyric_set[index][3]
 
-
-        # while len(caption_numberized) < self.max_length:
-        #     caption_numberized.append(word_to_index.get("<UNK>", 0))
-
-        # caption_numberized_array = np.array(caption_numberized)
-        # caption_numberized_tensor = torch.from_numpy(caption_numberized_array)
-
-        return {'title': title, 'genre': genre, 'lyric': lyric, 'line_length': line_length}
+        line_num = len(lyric)
+        if line_num > self.max_line_num:
+            lyric = lyric[:self.max_line_num]
+            line_length = line_length[:self.max_line_num]
+            line_num = self.max_line_num
+        else:
+            for _ in range(self.max_line_num - line_num):
+                lyric.append([UNK]*MaxLineLen)
+                line_length.append(0)
+        
+        return {'title': title, 'genre': genre, 'lyric': np.array(lyric), 'line_length': np.array(line_length), 'line_num': line_num}
 
 def trainEpochs(batch_size):
     train_loader = data_utils.DataLoader(dataset=LyricDataset(train_set),
                                          batch_size=batch_size,
-                                         shuffle=False)
+                                         shuffle=True)
     val_loader = data_utils.DataLoader(dataset=LyricDataset(val_set),
                                        batch_size=batch_size,
                                        shuffle=True)
@@ -64,6 +67,7 @@ def trainEpochs(batch_size):
             lyric_tensor = data['lyric']
 
             line_length_tensor = data['line_length']
+            line_num_tensor = data['line_num']
 
             pdb.set_trace()
 
