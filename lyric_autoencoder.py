@@ -12,7 +12,9 @@ val_set = pickle.load(open('data/valid_012','rb'))
 # load dictionary
 # idx2word = corpora.Dictionary.load('data/dict.txt')
 # load w2v vectors
-idx2vec = pickle.load(open('data/w2v.pkl','rb'))
+# idx2vec = pickle.load(open('data/w2v.pkl','rb'))
+word_embedding = pickle.load(open('w2v_embedding.pkl','rb'))
+genre_embedding = torch.eye(3)
 pdb.set_trace()
 # special token idx
 SOS = 9744
@@ -35,7 +37,7 @@ class LyricDataset(data_utils.Dataset):
         return self.len
     
     def __getitem__(self, index):
-        title = np.mean(np.array([idx2vec[key] for key in self.lyric_set[index][0]]), axis=0)
+        title = np.mean(np.array([word_embedding[key] for key in self.lyric_set[index][0]]), axis=0)
         genre = self.lyric_set[index][1]
         lyric = self.lyric_set[index][2]
         line_length = self.lyric_set[index][3]
@@ -58,17 +60,54 @@ def train_val(model_type,
               lyric_tensor,
               line_length_tensor,
               line_num_tensor,
-              sentence_encoder,
-              lyric_encoder,
-              lyric_generator,
-              sentence_generator,
+              sentence_encoder, # se
+              lyric_encoder, # le
+              lyric_generator, # lg
+              sentence_generator, # sg
               sentence_encoder_optimizer,
               lyric_encoder_optimizer,
               lyric_generator_optimizer,
               sentence_generator_optimizer,
               batch_size,
-              max_line_num=MaxLineNum):
-    pass
+              max_line_num = MaxLineNum,
+              max_line_length = MaxLineLen):
+     
+    if model_type == 'train':
+        sentence_encoder_optimizer.zero_grad()
+        lyric_encoder_optimizer.zero_grad()
+        lyric_generator_optimizer.zero_grad()
+        sentence_generator_optimizer.zero_grad()
+    
+    auto_loss_data = 0.0
+
+    line_number = torch.max(line_num_tensor).item()
+    line_length = torch.max(line_length_tensor).item()
+
+    le_hidden = cudalize(Variable(lyric_encoder.initHidden(batch_size)))
+    le_hiddens_variable = le_hidden[0]
+    
+    for line_num in range(line_number):
+        se_hidden = cudalize(Variable(sentence_encoder.initHidden(batch_size)))
+        se_hiddens_variable = se_hidden[0]
+        
+        for line_idx in range(line_length):
+            input_word_tensor = torch.from_numpy(word_embedding[lyric_tensor[:,line_num,line_idx].tolist()]).type(torch.FloatTensor)
+            # title_tensor - this line
+            input_genere_tensor = genre_embedding[genre_tensor]
+            se_input = torch.cat((input_word_tensor, title_tensor, input_genere_tensor), 1).view(1, batch_size, -1)
+            se_input = cudalize(Variable(se_input))
+            _, se_hidden = sentence_encoder(se_input, se_hidden)
+            se_hiddens_variable = torch.cat((se_hiddens_variable, se_hidden))
+        
+        le_input = se_hiddens_variable[line_length_tensor[:,line_num], np.arange(batch_size), :]
+        _, le_hidden = sentence_encoder(le_input, le_hidden)
+        le_hiddens_variable = torch.cat((le_hiddens_variable, le_hidden))
+    lyric_latent = le_hiddens_variable[line_num_tensor, np.arange(batch_size), :]
+
+    # need to do decoder on lyric_latent
+
+
+    return auto_loss_data
 
 def trainEpochs(sentence_encoder, 
                 lyric_encoder, 
@@ -105,7 +144,9 @@ def trainEpochs(sentence_encoder,
             line_length_tensor = data['line_length']
             line_num_tensor = data['line_num']
 
-            (, ) = train_val('train',
+            pdb.set_trace()
+
+            loss = train_val('train',
                              title_tensor,
                              genre_tensor,
                              lyric_tensor,
@@ -139,7 +180,7 @@ def trainEpochs(sentence_encoder,
         torch.save(sentence_generator.state_dict(), saving_dir+'/sentence_generator_'+str(epoch+1))
 
 if __name__=='__main__':
-    vocabulary_size = len(idx2vec)
+    vocabulary_size = len(word_embedding)
 
     word_embedding_size = 300
     title_embedding_size = 300
