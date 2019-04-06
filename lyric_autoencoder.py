@@ -10,9 +10,10 @@ import torch.utils.data as data_utils
 train_set = pickle.load(open('data/training_012','rb'))
 val_set = pickle.load(open('data/valid_012','rb'))
 # load dictionary
-idx2word = corpora.Dictionary.load('data/dict.txt')
+# idx2word = corpora.Dictionary.load('data/dict.txt')
 # load w2v vectors
 idx2vec = pickle.load(open('data/w2v.pkl','rb'))
+pdb.set_trace()
 # special token idx
 SOS = 9744
 EOS = 9743
@@ -51,31 +52,133 @@ class LyricDataset(data_utils.Dataset):
         
         return {'title': title, 'genre': genre, 'lyric': np.array(lyric), 'line_length': np.array(line_length), 'line_num': line_num}
 
-def trainEpochs(batch_size):
+def train_val(model_type,
+              title_tensor,
+              genre_tensor,
+              lyric_tensor,
+              line_length_tensor,
+              line_num_tensor,
+              sentence_encoder,
+              lyric_encoder,
+              lyric_generator,
+              sentence_generator,
+              sentence_encoder_optimizer,
+              lyric_encoder_optimizer,
+              lyric_generator_optimizer,
+              sentence_generator_optimizer,
+              batch_size,
+              max_line_num=MaxLineNum):
+    pass
+
+def trainEpochs(sentence_encoder, 
+                lyric_encoder, 
+                lyric_generator, 
+                sentence_generator, 
+                batch_size, 
+                learning_rate, 
+                num_epoch, 
+                print_every):
+    sentence_encoder_optimizer = torch.optim.Adam(sentence_encoder.parameters(), lr=learning_rate)
+    lyric_encoder_optimizer = torch.optim.Adam(lyric_encoder.parameters(), lr=learning_rate)
+    lyric_generator_optimizer = torch.optim.Adam(lyric_generator.parameters(), lr=learning_rate)
+    sentence_generator_optimizer = torch.optim.Adam(sentence_generator.parameters(), lr=learning_rate)
+
     train_loader = data_utils.DataLoader(dataset=LyricDataset(train_set),
                                          batch_size=batch_size,
                                          shuffle=True)
     val_loader = data_utils.DataLoader(dataset=LyricDataset(val_set),
                                        batch_size=batch_size,
                                        shuffle=True)
-    
-    for batch, data in enumerate(train_loader, 0):
+    iter_epoch = 0
+    for epoch in range(num_epoch):
+        sentence_encoder.train()
+        lyric_encoder.train()
+        lyric_generator.train()
+        sentence_generator.train()
+
+        for batch, data in enumerate(train_loader, 0):
             title_tensor = data['title']
             # image_feature_variable = Variable(image_feature_tensor)
             genre_tensor = data['genre']
             # caption_numberized_variable = Variable(caption_numberized_tensor)
             lyric_tensor = data['lyric']
-
             line_length_tensor = data['line_length']
             line_num_tensor = data['line_num']
 
-            pdb.set_trace()
+            (, ) = train_val('train',
+                             title_tensor,
+                             genre_tensor,
+                             lyric_tensor,
+                             line_length_tensor,
+                             line_num_tensor,
+                             sentence_encoder,
+                             lyric_encoder,
+                             lyric_generator,
+                             sentence_generator,
+                             sentence_encoder_optimizer,
+                             lyric_encoder_optimizer,
+                             lyric_generator_optimizer,
+                             sentence_generator_optimizer,
+                             len(line_num_tensor))
+        
+        # validation
+        sentence_encoder.eval()
+        lyric_encoder.eval()
+        lyric_generator.eval()
+        sentence_generator.eval()
+        # need to complete
+
+        # write to tensorboard
+        iter_epoch += 1
+        # need to complete
+
+        # save models    
+        torch.save(sentence_encoder.state_dict(), saving_dir+'/sentence_encoder_'+str(epoch+1))
+        torch.save(lyric_encoder.state_dict(), saving_dir+'/lyric_encoder_'+str(epoch+1))
+        torch.save(lyric_generator.state_dict(), saving_dir+'/lyric_generator_'+str(epoch+1))
+        torch.save(sentence_generator.state_dict(), saving_dir+'/sentence_generator_'+str(epoch+1))
 
 if __name__=='__main__':
+    vocabulary_size = len(idx2vec)
+
+    word_embedding_size = 300
+    title_embedding_size = 300
+    genre_embedding_size = 3
+
+    # sentence encoder - se
+    se_input_size = word_embedding_size + title_embedding_size + genre_embedding_size
+    se_hidden_size = 512
+    sentence_encoder = SentenceEncoder(se_input_size, se_hidden_size)
+    sentence_encoder = cudalize(sentence_encoder)
+    sentence_encoder.train()
+
+    # lyric encoder - le
+    le_input_size = se_hidden_size
+    le_hidden_size = 512
+    lyric_encoder = LyricEncoder(le_input_size, le_hidden_size)
+    lyric_encoder = cudalize(lyric_encoder)
+    lyric_encoder.train()
+
+    # lyric generator - lg
+    lg_input_size = le_hidden_size + title_embedding_size + genre_embedding_size
+    lg_hidden_size = 512
+    lg_topic_latent_size = 512
+    lg_topic_output_size = 512
+    lyric_generator = LyricGenerator(lg_input_size, lg_hidden_size, lg_topic_latent_size, lg_topic_output_size)
+    lyric_generator = cudalize(lyric_generator)
+    lyric_generator.train()
+
+    # sentence generator - sg
+    sg_input_size = word_embedding_size + title_embedding_size + genre_embedding_size
+    sg_hidden_size = 512
+    sg_output_size = vocabulary_size
+    sentence_generator = SentenceGenerator(sg_input_size, sg_hidden_size, sg_output_size)
+    sentence_generator = cudalize(sentence_generator)
+    sentence_generator.train()
+
     batch_size = 10
-    trainEpochs(batch_size)
+    learning_rate = 0.001
+    num_epoch = 500
+    print_every = 5
 
-
-#     sentence_encoder = SentenceEncoder()
-#     sentence_encoder = cudalize(sentence_encoder)
-#     sentence_encoder.train()
+    trainEpochs(sentence_encoder, lyric_encoder, lyric_generator, sentence_generator, batch_size, learning_rate, num_epoch, print_every)
