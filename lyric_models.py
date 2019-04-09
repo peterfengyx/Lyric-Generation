@@ -69,7 +69,7 @@ class LyricGenerator(nn.Module):
 class SentenceGenerator(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(SentenceGenerator, self).__init__()
-        # self.hidden_size = hidden_size
+        self.output_size = output_size
         self.gru = nn.GRU(input_size, hidden_size)
         self.out = nn.Linear(hidden_size, output_size)
         # self.softmax = nn.LogSoftmax(dim=1)
