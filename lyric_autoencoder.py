@@ -9,13 +9,7 @@ import torch.utils.data as data_utils
 # load data
 train_set = pickle.load(open('data/training_012','rb'))
 val_set = pickle.load(open('data/valid_012','rb'))
-# load dictionary
-# idx2word = corpora.Dictionary.load('data/dict.txt')
-# load w2v vectors
-# idx2vec = pickle.load(open('data/w2v.pkl','rb'))
-word_embedding = pickle.load(open('w2v_embedding.pkl','rb'))
-genre_embedding = torch.eye(3)
-# pdb.set_trace()
+#--------------------------- Meta Data ---------------------------
 # special token idx
 SOS = 9744
 EOS = 9743
@@ -24,10 +18,21 @@ UNK = 9745
 MaxLineLen = 32 
 # maximum lyric length
 MaxLineNum = 40 # Need to be reset
-
+# dictionary size
+DictionarySize = 9746
+# genre size
+GenreSize = 3
+#----------------------------------------------------------------
+# load dictionary
+# idx2word = corpora.Dictionary.load('data/dict.txt')
+# load w2v vectors
+# idx2vec = pickle.load(open('data/w2v.pkl','rb'))
+# word_embedding = pickle.load(open('w2v_embedding.pkl','rb'))
+genre_embedding = torch.eye(GenreSize)
+word_embedding = torch.eye(DictionarySize)
 line_end_embedding = torch.eye(MaxLineNum)
-# pdb.set_trace()
 
+'''
 class LyricDataset(data_utils.Dataset):
     def __init__(self, lyric_set, max_line_num = MaxLineNum):
         self.lyric_set = lyric_set
@@ -278,3 +283,4 @@ if __name__=='__main__':
     print_every = 5
 
     trainEpochs(sentence_encoder, lyric_encoder, lyric_generator, sentence_generator, batch_size, learning_rate, num_epoch, print_every)
+'''
