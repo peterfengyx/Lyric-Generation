@@ -163,10 +163,13 @@ def train_val(model_type,
             sg_word_loss = masked_cross_entropy(sg_logits, sg_target, sg_length)
     
     lg_logits = lg_end_outputs.transpose(0, 1).contiguous() # -> batch x seq, torch.Size([10, 40, 2])
-    lg_target = cudalize(line_end_embedding[line_num_tensor-1].contiguous()) # -> batch x seq, torch.Size([10, 40])
+    lg_target = cudalize(line_end_embedding[line_num_tensor-1][:,:line_number].contiguous()) # -> batch x seq, torch.Size([10, 40])
     lg_length = line_num_tensor
 
-    lg_end_loss = masked_cross_entropy(lg_logits, lg_target, lg_length)
+    try:
+        lg_end_loss = masked_cross_entropy(lg_logits, lg_target, lg_length)
+    except:
+        pdb.set_trace()
     
     sg_word_loss_data = sg_word_loss.item()
     lg_end_loss_data = lg_end_loss.item()
@@ -202,7 +205,7 @@ def trainEpochs(sentence_encoder,
 
     train_loader = data_utils.DataLoader(dataset=LyricDataset(train_set),
                                          batch_size=batch_size,
-                                         shuffle=False) # True)
+                                         shuffle=True) # True)
     val_loader = data_utils.DataLoader(dataset=LyricDataset(val_set),
                                        batch_size=batch_size,
                                        shuffle=True)
@@ -227,7 +230,7 @@ def trainEpochs(sentence_encoder,
             line_length_tensor = data['line_length'] # torch.Size([10, 40])
             line_num_tensor = data['line_num'] # torch.Size([10]), tensor([40, 17, 31, 38, 40, 40, 22,  9, 12, 39])
 
-            print(batch)
+            # print(batch)
             auto_loss, word_loss, end_loss = train_val('train',
                                                        title_tensor,
                                                        genre_tensor,
@@ -243,7 +246,6 @@ def trainEpochs(sentence_encoder,
                                                        lyric_generator_optimizer,
                                                        sentence_generator_optimizer,
                                                        len(line_num_tensor))
-        '''
         
             print_loss_total_auto += auto_loss
             print_loss_total_auto_list.append(auto_loss)
@@ -287,7 +289,6 @@ def trainEpochs(sentence_encoder,
             line_length_tensor = val_data['line_length'] # torch.Size([10, 40])
             line_num_tensor = val_data['line_num'] # torch.Size([10]), tensor([40, 17, 31, 38, 40, 40, 22,  9, 12, 39])
 
-            print(batch)
             auto_loss, word_loss, end_loss = train_val('val',
                                                        title_tensor,
                                                        genre_tensor,
@@ -312,7 +313,6 @@ def trainEpochs(sentence_encoder,
         print_loss_end_avg_val = np.mean(np.array(validation_loss_end_list))
 
         print('        Validation loss: [%.6f, %.6f, %.6f]' % (print_loss_auto_avg_val, print_loss_word_avg_val, print_loss_end_avg_val))
-        '''
         
         # write to tensorboard
         # iter_epoch += 1
@@ -370,7 +370,7 @@ if __name__=='__main__':
 
     learning_rate = 0.001
     num_epoch = 500
-    print_every = 5
+    print_every = 2
     
     # writer = SummaryWriter()
     trainEpochs(sentence_encoder, lyric_encoder, lyric_generator, sentence_generator, batch_size, learning_rate, num_epoch, print_every)
