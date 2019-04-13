@@ -18,42 +18,39 @@ def cudalize(item, use_cuda=use_cuda):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class SentenceEncoder(nn.Module):
-    def __init__(self, input_size, embedding_size, hidden_size, batch_size):
+    def __init__(self, input_size, embedding_size, hidden_size):
         super(SentenceEncoder, self).__init__()
         self.hidden_size = hidden_size
-        self.batch_size = batch_size
         self.embedding = nn.Linear(input_size, embedding_size)
         self.gru = nn.GRU(embedding_size, hidden_size)
 
-    def forward(self, input, hidden):
-        output = self.embedding(input).view(1, self.batch_size, -1)
+    def forward(self, input, hidden, batch_size):
+        output = self.embedding(input).view(1, batch_size, -1)
         output, hidden = self.gru(output, hidden)
         return output, hidden
 
-    def initHidden(self):
-        return torch.zeros(1, self.batch_size, self.hidden_size, device=device)
+    def initHidden(self, batch_size):
+        return torch.zeros(1, batch_size, self.hidden_size, device=device)
 
 class LyricEncoder(nn.Module):
-    def __init__(self, input_size, embedding_size, hidden_size, batch_size):
+    def __init__(self, input_size, embedding_size, hidden_size):
         super(LyricEncoder, self).__init__()
         self.hidden_size = hidden_size
-        self.batch_size = batch_size
         self.embedding = nn.Linear(input_size, embedding_size)
         self.gru = nn.GRU(embedding_size, hidden_size)
 
-    def forward(self, input, hidden):
-        output = self.embedding(input).view(1, self.batch_size, -1)
+    def forward(self, input, hidden, batch_size):
+        output = self.embedding(input).view(1, batch_size, -1)
         output, hidden = self.gru(output, hidden)
         return output, hidden
 
-    def initHidden(self):
-        return torch.zeros(1, self.batch_size, self.hidden_size, device=device)
+    def initHidden(self, batch_size):
+        return torch.zeros(1, batch_size, self.hidden_size, device=device)
 
 class LyricGenerator(nn.Module):
-    def __init__(self, input_size, embedding_size, hidden_size, topic_latent_size, topic_output_size, batch_size):
+    def __init__(self, input_size, embedding_size, hidden_size, topic_latent_size, topic_output_size):
         super(LyricGenerator, self).__init__()
         self.hidden_size = hidden_size
-        self.batch_size = batch_size
         self.embedding = nn.Linear(input_size, embedding_size)
         self.gru = nn.GRU(embedding_size, hidden_size)
         self.end_layer = nn.Linear(hidden_size, 2)
@@ -62,8 +59,8 @@ class LyricGenerator(nn.Module):
         self.topic_layer_relu = nn.ReLU(inplace=True)
         self.topic_layer_2 = nn.Linear(topic_latent_size, topic_output_size)
         
-    def forward(self, input, hidden):
-        output = self.embedding(input).view(1, self.batch_size, -1)
+    def forward(self, input, hidden, batch_size):
+        output = self.embedding(input).view(1, batch_size, -1)
         output, hidden = self.gru(output, hidden)
         end_output = self.end_layer(output[0])
         # output = self.softmax(self.out(output[0]))
@@ -72,29 +69,28 @@ class LyricGenerator(nn.Module):
         topic_output = self.topic_layer_2(topic_output)
         return end_output, topic_output, hidden
 
-    def initHidden(self):
-        return torch.zeros(1, self.batch_size, self.hidden_size, device=device)
+    def initHidden(self, batch_size):
+        return torch.zeros(1, batch_size, self.hidden_size, device=device)
 
 class SentenceGenerator(nn.Module):
-    def __init__(self, input_size, embedding_size, hidden_size, output_size, batch_size):
+    def __init__(self, input_size, embedding_size, hidden_size, output_size):
         super(SentenceGenerator, self).__init__()
         self.hidden_size = hidden_size
-        self.batch_size = batch_size
         self.output_size = output_size
         self.embedding = nn.Linear(input_size, embedding_size)
         self.gru = nn.GRU(embedding_size, hidden_size)
         self.out = nn.Linear(hidden_size, output_size)
         # self.softmax = nn.LogSoftmax(dim=1)
 
-    def forward(self, input, hidden):
-        output = self.embedding(input).view(1, self.batch_size, -1)
+    def forward(self, input, hidden, batch_size):
+        output = self.embedding(input).view(1, batch_size, -1)
         output, hidden = self.gru(output, hidden)
         output = self.out(output[0])
         # output = self.softmax(output)
         return output, hidden
     
-    def initHidden(self):
-        return torch.zeros(1, self.batch_size, self.hidden_size, device=device)
+    def initHidden(self, batch_size):
+        return torch.zeros(1, batch_size, self.hidden_size, device=device)
 
 class LyricDiscriminator(nn.Module):
     def __init__(self, input_size):
