@@ -8,9 +8,10 @@ from tensorboardX import SummaryWriter
 import torch.utils.data as data_utils
 
 # input from command line
-LgEndLossWeight = 5
+LgEndLossWeight = 10
 SgWordLossWeight = 1
 SavingDir = "."
+LearningRate = 0.0001
 # --------------------------- Load Data ---------------------------
 train_set = pickle.load(open('data/training_012','rb'))
 val_set = pickle.load(open('data/valid_012','rb'))
@@ -129,6 +130,8 @@ def train_val(model_type,
 
     lg_hidden = cudalize(Variable(lyric_generator.initHidden(batch_size))) # torch.Size([1, 10, 512])
     lg_end_outputs = cudalize(Variable(torch.zeros(line_number, batch_size, 2))) #torch.Size([40, 10, 2])
+
+    sg_word_loss = cudalize(Variable(torch.tensor(0.0)))
     for line_num in range(line_number):
         lg_title_tensor_variable = cudalize(Variable(title_tensor)) # torch.Size([10, 9746])
         lg_genre_variable = cudalize(Variable(genre_embedding[genre_tensor])) # torch.Size([10, 3])
@@ -161,7 +164,8 @@ def train_val(model_type,
         try:
             sg_word_loss += masked_cross_entropy(sg_logits, sg_target, sg_length)
         except:
-            sg_word_loss = masked_cross_entropy(sg_logits, sg_target, sg_length)
+            pdb.set_trace()
+            # sg_word_loss = masked_cross_entropy(sg_logits, sg_target, sg_length)
     
     lg_logits = lg_end_outputs.transpose(0, 1).contiguous() # -> batch x seq, torch.Size([10, 40, 2])
     lg_target = cudalize(line_end_embedding[line_num_tensor-1][:,:line_number].contiguous()) # -> batch x seq, torch.Size([10, 40])
@@ -173,13 +177,13 @@ def train_val(model_type,
         pdb.set_trace()
     
     sg_word_loss /= line_number
-    
+
+    sg_word_loss = sg_word_loss_weight*sg_word_loss
+    lg_end_loss = lg_end_loss_weight*lg_end_loss
+    auto_loss = lg_end_loss + sg_word_loss
+
     sg_word_loss_data = sg_word_loss.item()
     lg_end_loss_data = lg_end_loss.item()
-
-    # need to return these two data as well!
-    auto_loss = lg_end_loss_weight*lg_end_loss + sg_word_loss_weight*sg_word_loss # need to pass in these two weights
-    # auto_loss = lg_end_loss + sg_word_loss # for debug purpose
     auto_loss_data = auto_loss.item()
 
     if model_type == 'train':
@@ -337,7 +341,7 @@ if __name__=='__main__':
     # sentence encoder - se
     se_input_size = word_embedding_size + title_embedding_size + genre_embedding_size
     se_embedding_size = 300
-    se_hidden_size = 512
+    se_hidden_size = 300 # 512
     sentence_encoder = SentenceEncoder(se_input_size, se_embedding_size, se_hidden_size)
     sentence_encoder = cudalize(sentence_encoder)
     sentence_encoder.train()
@@ -353,9 +357,9 @@ if __name__=='__main__':
     # lyric generator - lg
     lg_input_size = le_hidden_size + title_embedding_size + genre_embedding_size
     lg_embedding_size = 300
-    lg_hidden_size = 512
-    lg_topic_latent_size = 512
-    lg_topic_output_size = 512
+    lg_hidden_size = 300 # 512
+    lg_topic_latent_size = 300 # 512
+    lg_topic_output_size = 300 # 512
     lyric_generator = LyricGenerator(lg_input_size, lg_embedding_size, lg_hidden_size, lg_topic_latent_size, lg_topic_output_size)
     lyric_generator = cudalize(lyric_generator)
     lyric_generator.train()
@@ -363,14 +367,14 @@ if __name__=='__main__':
     # sentence generator - sg
     sg_input_size = word_embedding_size + title_embedding_size + genre_embedding_size
     sg_embedding_size = 300
-    sg_hidden_size = 512
+    sg_hidden_size = 300 # 512
     sg_output_size = DictionarySize
     sentence_generator = SentenceGenerator(sg_input_size, sg_embedding_size, sg_hidden_size, sg_output_size)
     sentence_generator = cudalize(sentence_generator)
     sentence_generator.train()
 
-    batch_size = 15
-    learning_rate = 0.001
+    batch_size = 20
+    learning_rate = LearningRate
     num_epoch = 500
     print_every = 1
     
