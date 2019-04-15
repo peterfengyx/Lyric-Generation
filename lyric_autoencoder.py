@@ -56,17 +56,17 @@ class LyricDataset(data_utils.Dataset):
         lyric = self.lyric_set[index][2]
         line_length = self.lyric_set[index][3]
 
-        line_num = len(lyric)
-        if line_num > self.max_line_num:
+        line_numb = len(lyric)
+        if line_numb > self.max_line_num:
             lyric = lyric[:self.max_line_num]
             line_length = line_length[:self.max_line_num]
-            line_num = self.max_line_num
+            line_numb = self.max_line_num
         else:
-            for _ in range(self.max_line_num - line_num):
+            for _ in range(self.max_line_num - line_numb):
                 lyric.append([UNK]*MaxLineLen)
                 line_length.append(0)
         
-        return {'title': title, 'genre': genre, 'lyric': np.array(lyric), 'line_length': np.array(line_length), 'line_num': line_num}
+        return {'title': title, 'genre': genre, 'lyric': np.array(lyric), 'line_length': np.array(line_length), 'line_numb': line_numb}
 
 def train_val(model_type,
               title_tensor,
@@ -247,7 +247,7 @@ def trainEpochs(sentence_encoder,
             genre_tensor = data['genre'] # torch.Size([10]), tensor([0, 2, 1, 1, 0, 1, 2, 1, 1, 1])
             lyric_tensor = data['lyric'] # torch.Size([10, 40, 32])
             line_length_tensor = data['line_length'] # torch.Size([10, 40])
-            line_num_tensor = data['line_num'] # torch.Size([10]), tensor([40, 17, 31, 38, 40, 40, 22,  9, 12, 39])
+            line_num_tensor = data['line_numb'] # torch.Size([10]), tensor([40, 17, 31, 38, 40, 40, 22,  9, 12, 39])
 
             # print(batch)
             auto_loss, word_loss, end_loss = train_val('train',
@@ -306,7 +306,7 @@ def trainEpochs(sentence_encoder,
             genre_tensor = val_data['genre'] # torch.Size([10]), tensor([0, 2, 1, 1, 0, 1, 2, 1, 1, 1])
             lyric_tensor = val_data['lyric'] # torch.Size([10, 40, 32])
             line_length_tensor = val_data['line_length'] # torch.Size([10, 40])
-            line_num_tensor = val_data['line_num'] # torch.Size([10]), tensor([40, 17, 31, 38, 40, 40, 22,  9, 12, 39])
+            line_num_tensor = val_data['line_numb'] # torch.Size([10]), tensor([40, 17, 31, 38, 40, 40, 22,  9, 12, 39])
 
             auto_loss, word_loss, end_loss = train_val('val',
                                                        title_tensor,
