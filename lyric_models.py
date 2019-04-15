@@ -96,16 +96,17 @@ class LyricDiscriminator(nn.Module):
     def __init__(self, input_size):
         super(LyricDiscriminator, self).__init__()
         self.fc_1 = nn.Linear(input_size, 256)
-        self.relu_1 = nn.ReLU(inplace=True)
+        self.lrelu_1 = nn.LeakyReLU(0.01)
         # self.fc_2 = nn.Linear(1024, 256)
-        # self.relu_2 = nn.ReLU(inplace=True)
+        # self.lrelu_2 = nn.LeakyReLU(0.01)
         self.fc_3 = nn.Linear(256, 1)
-        self.sigmoid = nn.Sigmoid()
+        # self.sigmoid = nn.Sigmoid()
 
     def forward(self, input):
-        output = self.relu_1(self.fc_1(input))
-        # output = self.relu_2(self.fc_2(output))
-        output = self.sigmoid(self.fc_3(output))
+        output = self.lrelu_1(self.fc_1(input))
+        # output = elf.lrelu_2(self.fc_2(output))
+        # output = self.sigmoid(self.fc_3(output))
+        output = self.fc_3(output)
         return output
     
     def _initialize_weights(self):

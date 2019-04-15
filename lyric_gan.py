@@ -6,6 +6,7 @@ from gensim import corpora
 from tensorboardX import SummaryWriter
 
 import torch.utils.data as data_utils
+from torch.autograd import grad
 
 # input from command line
 # LgEndLossWeight = 5 # 10
@@ -28,6 +29,7 @@ MaxLineNum = 40 # Need to be reset
 DictionarySize = 9746
 # genre size
 GenreSize = 3
+# title size
 TitleSize = 300
 #----------------------------------------------------------------
 # load dictionary
@@ -65,127 +67,196 @@ class LyricDataset(data_utils.Dataset):
                 line_length.append(0)
         
         return {'title': title, 'genre': genre, 'lyric': np.array(lyric), 'line_length': np.array(line_length), 'line_num': line_num}
-'''
+
 def train_val(model_type,
               title_tensor,
               genre_tensor,
-              lyric_tensor,
-              line_length_tensor,
-              line_num_tensor,
-              sentence_encoder, # se
-              lyric_encoder, # le
-              lyric_generator, # lg
-              sentence_generator, # sg
+              real_lyric_tensor,
+              real_line_length_tensor,
+              real_line_num_tensor,
+              sentence_encoder,
+              lyric_encoder,
+              lyric_generator,
+              sentence_generator,
+              lyric_discriminator,
               sentence_encoder_optimizer,
               lyric_encoder_optimizer,
               lyric_generator_optimizer,
               sentence_generator_optimizer,
+              lyric_discriminator_optimizer,
               batch_size,
-              max_line_num = MaxLineNum,
+              max_line_number = MaxLineNum,
               max_line_length = MaxLineLen):
-              
               #  ,
               # lg_end_loss_weight = LgEndLossWeight,
               # sg_word_loss_weight = SgWordLossWeight):
-     
+    
     if model_type == 'train':
         sentence_encoder_optimizer.zero_grad()
         lyric_encoder_optimizer.zero_grad()
         lyric_generator_optimizer.zero_grad()
         sentence_generator_optimizer.zero_grad()
+        lyric_discriminator_optimizer.zero_grad()
     
-    auto_loss_data = 0.0
-    sg_word_loss_data = 0.0
-    lg_end_loss_data = 0.0
+    gan_loss_data = 0.0
+    generator_loss_data = 0.0
+    discriminator_loss_data = 0.0
 
-    line_number = torch.max(line_num_tensor).item()
-    line_length = torch.max(line_length_tensor).item()
+    # real lyric embedding
+    real_line_number = torch.max(real_line_num_tensor).item()
+    real_line_length = torch.max(real_line_length_tensor).item()
 
-    le_hidden = cudalize(Variable(lyric_encoder.initHidden(batch_size))) # torch.Size([1, 10, 512])
-    le_hiddens_variable = le_hidden # torch.Size([1, 10, 512])
+    real_le_hidden = cudalize(Variable(lyric_encoder.initHidden(batch_size))) # torch.Size([1, 10, 512])
+    real_le_hiddens_variable = real_le_hidden # torch.Size([1, 10, 512])
     
-    for line_num in range(line_number):
-        se_hidden = cudalize(Variable(sentence_encoder.initHidden(batch_size))) # torch.Size([1, 10, 512])
-        se_hiddens_variable = se_hidden # torch.Size([1, 10, 512])
+    for real_line_num in range(real_line_number):
+        real_se_hidden = cudalize(Variable(sentence_encoder.initHidden(batch_size))) # torch.Size([1, 10, 512])
+        real_se_hiddens_variable = real_se_hidden # torch.Size([1, 10, 512])
         
-        for line_idx in range(line_length):
-            se_word_tensor = torch.from_numpy(word_embedding[lyric_tensor[:,line_num,line_idx]]).type(torch.FloatTensor) # torch.Size([10, 9746])
+        for real_line_idx in range(real_line_length):
+            real_se_word_tensor = torch.from_numpy(word_embedding[real_lyric_tensor[:,real_line_num,real_line_idx]]).type(torch.FloatTensor) # torch.Size([10, 9746])
             # title_tensor - this line, torch.Size([10, 9746])
-            se_genre_tensor = genre_embedding[genre_tensor] # torch.Size([10, 3])
-            se_input = torch.cat((se_word_tensor, title_tensor, se_genre_tensor), 1) # torch.Size([10, 19495])
-            se_input = cudalize(Variable(se_input))
-            _, se_hidden = sentence_encoder(se_input, se_hidden, batch_size)
-            se_hiddens_variable = torch.cat((se_hiddens_variable, se_hidden))
+            real_se_genre_tensor = genre_embedding[genre_tensor] # torch.Size([10, 3])
+            real_se_input = torch.cat((real_se_word_tensor, title_tensor, real_se_genre_tensor), 1) # torch.Size([10, 19495])
+            real_se_input = cudalize(Variable(real_se_input))
+            _, real_se_hidden = sentence_encoder(real_se_input, real_se_hidden, batch_size)
+            real_se_hiddens_variable = torch.cat((real_se_hiddens_variable, real_se_hidden))
 
-        line_latent_variable = se_hiddens_variable[line_length_tensor[:,line_num], np.arange(batch_size), :] # torch.Size([10, 512])
-        le_title_tensor_variable = cudalize(Variable(title_tensor)) # torch.Size([10, 9746])
-        le_genre_variable = cudalize(Variable(genre_embedding[genre_tensor])) # torch.Size([10, 3])
-        le_input = torch.cat((line_latent_variable, le_title_tensor_variable, le_genre_variable), 1) # torch.Size([10, 10261])
+        real_line_latent_variable = real_se_hiddens_variable[real_line_length_tensor[:,real_line_num], np.arange(batch_size), :] # torch.Size([10, 512])
+        real_le_title_tensor_variable = cudalize(Variable(title_tensor)) # torch.Size([10, 9746])
+        real_le_genre_variable = cudalize(Variable(genre_embedding[genre_tensor])) # torch.Size([10, 3])
+        real_le_input = torch.cat((real_line_latent_variable, real_le_title_tensor_variable, real_le_genre_variable), 1) # torch.Size([10, 10261])
 
-        _, le_hidden = lyric_encoder(le_input, le_hidden, batch_size)
-        le_hiddens_variable = torch.cat((le_hiddens_variable, le_hidden))
+        _, real_le_hidden = lyric_encoder(real_le_input, real_le_hidden, batch_size)
+        real_le_hiddens_variable = torch.cat((real_le_hiddens_variable, real_le_hidden))
     
-    lyric_latent_variable = le_hiddens_variable[line_num_tensor, np.arange(batch_size), :] # torch.Size([10, 512])
-    # need to do decoder on lyric_latent_variable
+    # real_lyric_latent_variable
+    real_lyric_latent_variable = real_le_hiddens_variable[real_line_num_tensor, np.arange(batch_size), :] # torch.Size([10, 512])
+
+    # generated lyric embedding
+    # this line needs to be careful!!!
+    noise_variable = cudalize(Variable(torch.randn(real_lyric_latent_variable.size()))) # torch.Size([10, 512])
     softmax = nn.Softmax(dim=1)
 
     lg_hidden = cudalize(Variable(lyric_generator.initHidden(batch_size))) # torch.Size([1, 10, 512])
-    lg_end_outputs = cudalize(Variable(torch.zeros(line_number, batch_size, 2))) #torch.Size([40, 10, 2])
 
-    sg_word_loss = cudalize(Variable(torch.tensor(0.0)))
-    for line_num in range(line_number):
+    lg_outputs_length = np.array([max_line_number]*batch_size) # (10,)
+    lg_length_flag = np.ones(batch_size, dtype=int) # (10,)
+
+    le_hidden = cudalize(Variable(lyric_encoder.initHidden(batch_size))) # torch.Size([1, 10, 512])
+    le_hiddens_variable = le_hidden # torch.Size([1, 10, 512])
+
+    for line_num in range(max_line_number):
         lg_title_tensor_variable = cudalize(Variable(title_tensor)) # torch.Size([10, 9746])
         lg_genre_variable = cudalize(Variable(genre_embedding[genre_tensor])) # torch.Size([10, 3])
-        lg_input = torch.cat((lyric_latent_variable, lg_title_tensor_variable, lg_genre_variable), 1) # torch.Size([10, 10261])
+        lg_input = torch.cat((noise_variable, lg_title_tensor_variable, lg_genre_variable), 1) # torch.Size([10, 10261])
 
         end_output, topic_output, lg_hidden = lyric_generator(lg_input, lg_hidden, batch_size)
-        lg_end_outputs[line_num] = end_output
+        # lg_end_outputs[line_num] = end_output
+
+        # workable, but be careful! Now p = 0.5, need to change for other p-s!
+        end_output_softmax = softmax(end_output)
+        end_ni = np.argmax(end_output_softmax.data.cpu().numpy(), axis=1)
+
+        end_batch_index = np.where(end_ni == 1)[0]
+        if np.sum(lg_length_flag[end_batch_index]) > 0:
+            lg_outputs_length[end_batch_index] = line_num
+            lg_length_flag[end_batch_index] = 0
 
         sg_hidden = topic_output.view(1, batch_size, -1) # torch.Size([1, 10, 512])
         sg_word_tensor = torch.from_numpy(np.array([word_embedding[SOS]]*batch_size)).type(torch.FloatTensor) # torch.Size([10, 9746])
-        sg_word_outputs = cudalize(Variable(torch.zeros(line_length-1, batch_size, sentence_generator.output_size))) # torch.Size([19, 10, 9746])
-        for line_idx in range(1, line_length):
+        # sg_word_outputs = cudalize(Variable(torch.zeros(line_length-1, batch_size, sentence_generator.output_size))) # torch.Size([19, 10, 9746])
+        sg_outputs_length = np.array([max_line_length-1]*batch_size)
+        sg_length_flag = np.ones(batch_size, dtype=int)
+
+        se_hidden = cudalize(Variable(sentence_encoder.initHidden(batch_size))) # torch.Size([1, 10, 512])
+        se_hiddens_variable = se_hidden # torch.Size([1, 10, 512])
+
+        # check till here
+        pdb.set_trace()
+
+        for line_idx in range(1, max_line_length):
             # title_tensor - this line
             sg_genre_tensor = genre_embedding[genre_tensor] # torch.Size([10, 3])
             sg_input = torch.cat((sg_word_tensor, title_tensor, sg_genre_tensor), 1) # torch.Size([10, 19495])
             sg_input = cudalize(Variable(sg_input))
 
             sg_output, sg_hidden = sentence_generator(sg_input, sg_hidden, batch_size)
-            sg_word_outputs[line_idx-1] = sg_output
+            # sg_word_outputs[line_idx-1] = sg_output
 
-            _, topi = softmax(sg_output).topk(1)
+            sg_output_softmax = softmax(sg_output)
+            _, topi = sg_output_softmax.topk(1)
             ni = topi.cpu().view(-1) # workable, but be careful
             sg_word_tensor = torch.from_numpy(word_embedding[ni]).type(torch.FloatTensor)
-        
-        sg_logits = sg_word_outputs.transpose(0, 1).contiguous() # -> batch x seq, torch.Size([10, 21, 9746])
-        sg_target = cudalize(lyric_tensor[:,line_num,1:line_length].contiguous()) # -> batch x seq, torch.Size([10, 21])
-        sg_length = line_length_tensor[:, line_num] - 1
-        sg_length[sg_length<0] = 0
 
-        try:
-            sg_word_loss += masked_cross_entropy(sg_logits, sg_target, sg_length)
-        except:
+            # be careful, potential bug!
+            eos_ni = np.argmax(sg_output_softmax.data.cpu().numpy(), axis=1) 
             pdb.set_trace()
-            # sg_word_loss = masked_cross_entropy(sg_logits, sg_target, sg_length)
+            # be careful about <SOS>!!!!!!
+
+            eos_batch_index = np.where(eos_ni == EOS)[0]
+            if np.sum(sg_length_flag[eos_batch_index]) > 0:
+                sg_outputs_length[eos_batch_index] = line_idx # exclude <SOS>, but include <EOS>
+                sg_length_flag[eos_batch_index] = 0
+            
+            se_input = sg_output_softmax # Need to concat title and genre!!!
+            _, se_hidden = sentence_encoder(se_input, se_hidden, batch_size)
+            se_hiddens_variable = torch.cat((se_hiddens_variable, se_hidden))
+        
+        line_latent_variable = se_hiddens_variable[sg_outputs_length, np.arange(batch_size), :] # torch.Size([10, 512])
+        le_title_tensor_variable = cudalize(Variable(title_tensor)) # torch.Size([10, 9746])
+        le_genre_variable = cudalize(Variable(genre_embedding[genre_tensor])) # torch.Size([10, 3])
+        le_input = torch.cat((line_latent_variable, le_title_tensor_variable, le_genre_variable), 1) # torch.Size([10, 10261])
+
+        _, le_hidden = lyric_encoder(le_input, le_hidden, batch_size)
+        le_hiddens_variable = torch.cat((le_hiddens_variable, le_hidden))
+
+    # generated_lyric_latent_variable
+    generated_lyric_latent_variable = le_hiddens_variable[lg_outputs_length, np.arange(batch_size), :] # torch.Size([10, 512])
     
-    lg_logits = lg_end_outputs.transpose(0, 1).contiguous() # -> batch x seq, torch.Size([10, 40, 2])
-    lg_target = cudalize(line_end_embedding[line_num_tensor-1][:,:line_number].contiguous()) # -> batch x seq, torch.Size([10, 40])
-    lg_length = line_num_tensor
+    '''
+    # GAN starts
+    D_result_real = lyric_discriminator(real_lyric_latent_variable).squeeze()
+    D_real_loss = -torch.mean(D_result_real)
 
-    try:
-        lg_end_loss = masked_cross_entropy(lg_logits, lg_target, lg_length)
-    except:
-        pdb.set_trace()
+    D_result_fake = lyric_discriminator(generated_lyric_latent_variable).squeeze()
+    D_fake_loss = torch.mean(D_result_fake)
+
+    # gradient penalty
+    alpha = torch.rand((batch_size, 1, 1, 1))
+    alpha = cudalize(alpha)
+
+    x_hat = alpha * un_image_projected.data + (1 - alpha) * un_sentence_embedding.data
+    x_hat.requires_grad = True
+
+    pred_hat = lyric_discriminator(x_hat)
+
+    gradients = grad(outputs=pred_hat, inputs=x_hat, grad_outputs=cudalize(torch.ones(pred_hat.size())), create_graph=True, retain_graph=True, only_inputs=True)[0]
+
+    lambda_ = 10
+    gradient_penalty = lambda_ * ((gradients.view(gradients.size()[0], -1).norm(2, 1) - 1) ** 2).mean()
+
+    discriminator_loss = D_real_loss + D_fake_loss + gradient_penalty
+    discriminator_loss_data = discriminator_loss.item()
+
+    if model_type == "train":
+        discriminator_loss.backward(retain_graph=True)
+        lyric_discriminator_optimizer.step()
+
+        projection_layer_optimizer.zero_grad()
+        caption_decoder_optimizer.zero_grad()
+        caption_encoder_optimizer.zero_grad()
+        transform_layer_optimizer.zero_grad()
+        distribution_discriminator_optimizer.zero_grad()
     
-    sg_word_loss /= line_number
+    D_result_generate = distribution_discriminator(un_sentence_embedding).squeeze()
+    generator_loss = -torch.mean(D_result_generate)
+    generator_loss_data = generator_loss.item()
 
-    sg_word_loss = sg_word_loss_weight*sg_word_loss
-    lg_end_loss = lg_end_loss_weight*lg_end_loss
-    auto_loss = lg_end_loss + sg_word_loss
-
-    sg_word_loss_data = sg_word_loss.item()
-    lg_end_loss_data = lg_end_loss.item()
-    auto_loss_data = auto_loss.item()
+    if model_type == 'train':
+        generator_loss.backward(retain_graph=True)
+    
+    # GAN finishes
 
     if model_type == 'train':
         auto_loss.backward()
@@ -193,14 +264,15 @@ def train_val(model_type,
         lyric_encoder_optimizer.step()
         lyric_generator_optimizer.step()
         sentence_generator_optimizer.step()
+    '''
     
-    # print(auto_loss_data, sg_word_loss_data, lg_end_loss_data)
-    return auto_loss_data, sg_word_loss_data, lg_end_loss_data
-'''
+    # print(gan_loss_data, generator_loss_data, discriminator_loss_data)
+    return gan_loss_data, generator_loss_data, discriminator_loss_data
+
 def trainEpochs(sentence_encoder, 
                 lyric_encoder, 
                 lyric_generator, 
-                sentence_generator,
+                sentence_generator, 
                 lyric_discriminator, 
                 batch_size, 
                 learning_rate, 
@@ -225,13 +297,14 @@ def trainEpochs(sentence_encoder,
         lyric_encoder.train()
         lyric_generator.train()
         sentence_generator.train()
+        lyric_discriminator.train()
 
-        print_loss_total_auto = 0.0  # Reset every print_every
-        print_loss_total_auto_list = []
-        print_loss_total_word = 0.0  # Reset every print_every
-        print_loss_total_word_list = []
-        print_loss_total_end = 0.0  # Reset every print_every
-        print_loss_total_end_list = []
+        # print_loss_total_auto = 0.0  # Reset every print_every
+        # print_loss_total_auto_list = []
+        # print_loss_total_word = 0.0  # Reset every print_every
+        # print_loss_total_word_list = []
+        # print_loss_total_end = 0.0  # Reset every print_every
+        # print_loss_total_end_list = []
 
         for batch, data in enumerate(train_loader, 0):
             title_tensor = data['title'].type(torch.FloatTensor) # torch.Size([10, 9746])
@@ -239,7 +312,6 @@ def trainEpochs(sentence_encoder,
             lyric_tensor = data['lyric'] # torch.Size([10, 40, 32])
             line_length_tensor = data['line_length'] # torch.Size([10, 40])
             line_num_tensor = data['line_num'] # torch.Size([10]), tensor([40, 17, 31, 38, 40, 40, 22,  9, 12, 39])
-        '''
 
             # print(batch)
             auto_loss, word_loss, end_loss = train_val('train',
@@ -252,11 +324,14 @@ def trainEpochs(sentence_encoder,
                                                        lyric_encoder,
                                                        lyric_generator,
                                                        sentence_generator,
+                                                       lyric_discriminator,
                                                        sentence_encoder_optimizer,
                                                        lyric_encoder_optimizer,
                                                        lyric_generator_optimizer,
                                                        sentence_generator_optimizer,
+                                                       lyric_discriminator_optimizer,
                                                        len(line_num_tensor))
+        '''
         
             print_loss_total_auto += auto_loss
             print_loss_total_auto_list.append(auto_loss)
@@ -289,6 +364,7 @@ def trainEpochs(sentence_encoder,
         lyric_encoder.eval()
         lyric_generator.eval()
         sentence_generator.eval()
+        lyric_discriminator.eval()
         
         validation_loss_auto_list = []
         validation_loss_word_list = []
@@ -339,13 +415,13 @@ def trainEpochs(sentence_encoder,
         # torch.save(sentence_generator.state_dict(), saving_dir+'/sentence_generator_'+str(epoch+1))
         
 if __name__=='__main__':
-    # start from here
     word_embedding_size = DictionarySize
     title_embedding_size = TitleSize
     genre_embedding_size = GenreSize
 
+    lyric_latent_size = 512
     # lyric generator - lg
-    lg_input_size = le_hidden_size + title_embedding_size + genre_embedding_size
+    lg_input_size = lyric_latent_size + title_embedding_size + genre_embedding_size
     lg_embedding_size = 300
     lg_hidden_size = 300 # 512
     lg_topic_latent_size = 300 # 512
@@ -377,16 +453,19 @@ if __name__=='__main__':
     # lyric encoder - le
     le_input_size = se_hidden_size + title_embedding_size + genre_embedding_size
     le_embedding_size = 300
-    le_hidden_size = 512
+    le_hidden_size = lyric_latent_size
     lyric_encoder = LyricEncoder(le_input_size, le_embedding_size, le_hidden_size)
     lyric_encoder = cudalize(lyric_encoder)
     # need to load the weights
     lyric_encoder.train()
 
-    lyric_discriminator = LyricDiscriminator()
+    # lyric discriminator - ldis
+    ldis_input_size = lyric_latent_size
+    lyric_discriminator = LyricDiscriminator(ldis_input_size)
     lyric_discriminator = cudalize(lyric_discriminator)
+    lyric_discriminator.train()
 
-    batch_size = 15 # 20
+    batch_size = 10 # 20
     learning_rate = LearningRate
     num_epoch = 500
     print_every = 1
