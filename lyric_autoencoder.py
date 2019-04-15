@@ -8,7 +8,7 @@ from tensorboardX import SummaryWriter
 import torch.utils.data as data_utils
 
 # input from command line
-LgEndLossWeight = 5 # 10
+LgEndLossWeight = 10 # 10
 SgWordLossWeight = 1
 SavingDir = "."
 LearningRate = 0.0001
@@ -38,6 +38,8 @@ word_embedding = np.eye(DictionarySize)
 title_embedding = pickle.load(open('data/w2v_embedding.pkl','rb'))
 genre_embedding = torch.eye(GenreSize)
 line_end_embedding = torch.eye(MaxLineNum).type(torch.LongTensor)
+
+writer = SummaryWriter()
 #----------------------------------------------------------------
 class LyricDataset(data_utils.Dataset):
     def __init__(self, lyric_set, max_line_num = MaxLineNum):
@@ -332,12 +334,12 @@ def trainEpochs(sentence_encoder,
         print('        Validation loss: [%.6f, %.6f, %.6f]' % (print_loss_auto_avg_val, print_loss_word_avg_val, print_loss_end_avg_val))
         
         # write to tensorboard
-        # iter_epoch += 1
-        # writer.add_scalars(saving_dir+'/auto_loss/train_val_epoch', {'train': print_loss_auto_avg_train, 'val': print_loss_auto_avg_val}, iter_epoch)
-        # writer.add_scalars(saving_dir+'/word_loss/train_val_epoch', {'train': print_loss_word_avg_train, 'val': print_loss_word_avg_val}, iter_epoch)
-        # writer.add_scalars(saving_dir+'/end_loss/train_val_epoch', {'train': print_loss_end_avg_train, 'val': print_loss_end_avg_val}, iter_epoch)
+        iter_epoch += 1
+        writer.add_scalars(saving_dir+'/auto_loss/train_val_epoch', {'train': print_loss_auto_avg_train, 'val': print_loss_auto_avg_val}, iter_epoch)
+        writer.add_scalars(saving_dir+'/word_loss/train_val_epoch', {'train': print_loss_word_avg_train, 'val': print_loss_word_avg_val}, iter_epoch)
+        writer.add_scalars(saving_dir+'/end_loss/train_val_epoch', {'train': print_loss_end_avg_train, 'val': print_loss_end_avg_val}, iter_epoch)
 
-        # save models    
+        # # save models    
         # torch.save(sentence_encoder.state_dict(), saving_dir+'/sentence_encoder_'+str(epoch+1))
         # torch.save(lyric_encoder.state_dict(), saving_dir+'/lyric_encoder_'+str(epoch+1))
         # torch.save(lyric_generator.state_dict(), saving_dir+'/lyric_generator_'+str(epoch+1))
@@ -383,11 +385,10 @@ if __name__=='__main__':
     sentence_generator = cudalize(sentence_generator)
     sentence_generator.train()
 
-    batch_size = 15 # 20
+    batch_size = 20 # 20
     learning_rate = LearningRate
     num_epoch = 500
     print_every = 1
     
-    # writer = SummaryWriter()
     trainEpochs(sentence_encoder, lyric_encoder, lyric_generator, sentence_generator, batch_size, learning_rate, num_epoch, print_every)
-    # writer.close()
+    writer.close()
