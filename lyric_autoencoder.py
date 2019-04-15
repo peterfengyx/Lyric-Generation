@@ -8,7 +8,7 @@ from tensorboardX import SummaryWriter
 import torch.utils.data as data_utils
 
 # input from command line
-LgEndLossWeight = 10
+LgEndLossWeight = 5 # 10
 SgWordLossWeight = 1
 SavingDir = "."
 LearningRate = 0.0001
@@ -161,11 +161,16 @@ def train_val(model_type,
         sg_length = line_length_tensor[:, line_num] - 1
         sg_length[sg_length<0] = 0
 
+        if sg_length.sum().item() == 0:
+            continue
+
         try:
             sg_word_loss += masked_cross_entropy(sg_logits, sg_target, sg_length)
         except:
             pdb.set_trace()
             # sg_word_loss = masked_cross_entropy(sg_logits, sg_target, sg_length)
+        if torch.isnan(sg_word_loss).item() == 1:
+            pdb.set_trace()
     
     lg_logits = lg_end_outputs.transpose(0, 1).contiguous() # -> batch x seq, torch.Size([10, 40, 2])
     lg_target = cudalize(line_end_embedding[line_num_tensor-1][:,:line_number].contiguous()) # -> batch x seq, torch.Size([10, 40])
@@ -178,6 +183,9 @@ def train_val(model_type,
     
     sg_word_loss /= line_number
 
+    if torch.isnan(sg_word_loss).item() == 1:
+        pdb.set_trace()
+
     sg_word_loss = sg_word_loss_weight*sg_word_loss
     lg_end_loss = lg_end_loss_weight*lg_end_loss
     auto_loss = lg_end_loss + sg_word_loss
@@ -185,6 +193,8 @@ def train_val(model_type,
     sg_word_loss_data = sg_word_loss.item()
     lg_end_loss_data = lg_end_loss.item()
     auto_loss_data = auto_loss.item()
+
+    # pdb.set_trace()
 
     if model_type == 'train':
         auto_loss.backward()
@@ -373,7 +383,7 @@ if __name__=='__main__':
     sentence_generator = cudalize(sentence_generator)
     sentence_generator.train()
 
-    batch_size = 20
+    batch_size = 15 # 20
     learning_rate = LearningRate
     num_epoch = 500
     print_every = 1
