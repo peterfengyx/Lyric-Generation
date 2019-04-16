@@ -36,11 +36,13 @@ class LyricEncoder(nn.Module):
     def __init__(self, input_size, embedding_size, hidden_size):
         super(LyricEncoder, self).__init__()
         self.hidden_size = hidden_size
-        self.embedding = nn.Linear(input_size, embedding_size)
-        self.gru = nn.GRU(embedding_size, hidden_size)
+        # self.embedding = nn.Linear(input_size, embedding_size)
+        # self.gru = nn.GRU(embedding_size, hidden_size)
+        self.gru = nn.GRU(input_size, hidden_size)
 
     def forward(self, input, hidden, batch_size):
-        output = self.embedding(input).view(1, batch_size, -1)
+        # output = self.embedding(input).view(1, batch_size, -1)
+        output = input.view(1, batch_size, -1)
         output, hidden = self.gru(output, hidden)
         return output, hidden
 
@@ -51,8 +53,9 @@ class LyricGenerator(nn.Module):
     def __init__(self, input_size, embedding_size, hidden_size, topic_latent_size, topic_output_size):
         super(LyricGenerator, self).__init__()
         self.hidden_size = hidden_size
-        self.embedding = nn.Linear(input_size, embedding_size)
-        self.gru = nn.GRU(embedding_size, hidden_size)
+        # self.embedding = nn.Linear(input_size, embedding_size)
+        # self.gru = nn.GRU(embedding_size, hidden_size)
+        self.gru = nn.GRU(input_size, hidden_size)
         self.end_layer = nn.Linear(hidden_size, 2)
         # self.softmax = nn.LogSoftmax(dim=1)
         self.topic_layer_1 = nn.Linear(hidden_size, topic_latent_size)
@@ -60,7 +63,8 @@ class LyricGenerator(nn.Module):
         self.topic_layer_2 = nn.Linear(topic_latent_size, topic_output_size)
         
     def forward(self, input, hidden, batch_size):
-        output = self.embedding(input).view(1, batch_size, -1)
+        # output = self.embedding(input).view(1, batch_size, -1)
+        output = input.view(1, batch_size, -1)
         output, hidden = self.gru(output, hidden)
         end_output = self.end_layer(output[0])
         # output = self.softmax(self.out(output[0]))
