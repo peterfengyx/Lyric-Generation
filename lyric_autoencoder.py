@@ -375,25 +375,25 @@ if __name__=='__main__':
     # sentence encoder - se
     se_input_size = word_embedding_size + title_embedding_size + genre_embedding_size
     se_embedding_size = 128
-    se_hidden_size = 256 # 512
+    se_hidden_size = 128 # 512
     sentence_encoder = SentenceEncoder(se_input_size, se_embedding_size, se_hidden_size)
     sentence_encoder = cudalize(sentence_encoder)
     sentence_encoder.train()
 
     # lyric encoder - le
     le_input_size = se_hidden_size + title_embedding_size + genre_embedding_size
-    le_embedding_size = 256 # not used
-    le_hidden_size = 256
+    le_embedding_size = 128 # not used
+    le_hidden_size = 128
     lyric_encoder = LyricEncoder(le_input_size, le_embedding_size, le_hidden_size)
     lyric_encoder = cudalize(lyric_encoder)
     lyric_encoder.train()
 
     # lyric generator - lg
     lg_input_size = le_hidden_size + title_embedding_size + genre_embedding_size
-    lg_embedding_size = 256 # not used
-    lg_hidden_size = 256 # 512
-    lg_topic_latent_size = 256 # 512
-    lg_topic_output_size = 256 # 512
+    lg_embedding_size = 128 # not used
+    lg_hidden_size = 128 # 512
+    lg_topic_latent_size = 128 # 512
+    lg_topic_output_size = 128 # 512
     lyric_generator = LyricGenerator(lg_input_size, lg_embedding_size, lg_hidden_size, lg_topic_latent_size, lg_topic_output_size)
     lyric_generator = cudalize(lyric_generator)
     lyric_generator.train()
