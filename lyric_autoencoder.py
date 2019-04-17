@@ -13,7 +13,7 @@ import os
 if len(sys.argv) != 4:
     raise ValueError("Wrong argument number!")
 
-LgEndLossWeight = int(sys.argv[1]) # 10 # 10
+LgEndLossWeight = float(sys.argv[1]) # 10 # 10
 SgWordLossWeight = 1
 BatchSize = int(sys.argv[2]) # 20
 SavingDir = sys.argv[3]
