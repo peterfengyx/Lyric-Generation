@@ -80,12 +80,28 @@ class DataLoader:
         return t
 
 
-d=DataLoader(tn_name='125')
-d.gen_training_set(types=[1,2,5])
+d=DataLoader(tn_name='012')
+d.gen_training_set(types=[0,1,2])
 print(d.count_number())
 #types={'Hip-Hop':0, 'Metal':1, 'Country':2, 'Jazz':3, 'Electronic':4, 'R&B':5}
 #data[][0]: title; data[][1]: genre; data[][2]: lyrics; data[][3]: length
 #title=d.tn_set[:,0]
 #w2v[1]
+ct=[0,0,0,0,0,0]
+data=d.data
+for i in range(len(data)-1,-1,-1):
+    for j in range(len(data[i][2])):
+        c=0
+        for k in data[i][2][j]:
+            if k==9745:
+                c+=1
+        if (data[i][3][j]*0.5<c):
+            ct[data[i][1]]+=1
+            data.pop(i)
+            break
+        
+with open(os.path.join('data','data.pkl'),'wb') as f:
+    pickle.dump(data,f) 
+        
 
 
