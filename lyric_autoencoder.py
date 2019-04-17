@@ -23,8 +23,8 @@ print ('LgEndLossWeight: ', LgEndLossWeight, ' BatchSize: ', BatchSize, ' Saving
 if not os.path.exists(SavingDir):
     os.makedirs(SavingDir)
 # --------------------------- Load Data ---------------------------
-train_set = pickle.load(open('data/training_012','rb'))
-val_set = pickle.load(open('data/valid_012','rb'))
+train_set = pickle.load(open('data_new/training_012','rb'))
+val_set = pickle.load(open('data_new/valid_012','rb'))
 #--------------------------- Meta Data ---------------------------
 # special token idx
 SOS = 9744
@@ -41,11 +41,11 @@ GenreSize = 3
 TitleSize = 300
 #----------------------------------------------------------------
 # load dictionary
-# idx2word = corpora.Dictionary.load('data/dict.txt')
+# idx2word = corpora.Dictionary.load('data_new/dict.txt')
 # load w2v vectors
-# idx2vec = pickle.load(open('data/w2v.pkl','rb'))
+# idx2vec = pickle.load(open('data_new/w2v.pkl','rb'))
 word_embedding = np.eye(DictionarySize)
-title_embedding = pickle.load(open('data/w2v_embedding.pkl','rb'))
+title_embedding = pickle.load(open('data_new/w2v_embedding.pkl','rb'))
 genre_embedding = torch.eye(GenreSize)
 line_end_embedding = torch.eye(MaxLineNum).type(torch.LongTensor)
 
@@ -175,7 +175,6 @@ def train_val(model_type,
             sg_word_outputs[line_idx-1] = sg_output
 
             sg_word_tensor = torch.from_numpy(word_embedding[lyric_tensor[:,line_num,line_idx]]).type(torch.FloatTensor)
-
             # pdb.set_trace()
             # _, topi = softmax(sg_output).topk(1)
             # ni = topi.cpu().view(-1) # workable, but be careful
