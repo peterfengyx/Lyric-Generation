@@ -174,9 +174,12 @@ def train_val(model_type,
             sg_output, sg_hidden = sentence_generator(sg_input, sg_hidden, batch_size)
             sg_word_outputs[line_idx-1] = sg_output
 
-            _, topi = softmax(sg_output).topk(1)
-            ni = topi.cpu().view(-1) # workable, but be careful
-            sg_word_tensor = torch.from_numpy(word_embedding[ni]).type(torch.FloatTensor)
+            sg_word_tensor = torch.from_numpy(word_embedding[lyric_tensor[:,line_num,line_idx]]).type(torch.FloatTensor)
+
+            # pdb.set_trace()
+            # _, topi = softmax(sg_output).topk(1)
+            # ni = topi.cpu().view(-1) # workable, but be careful
+            # sg_word_tensor = torch.from_numpy(word_embedding[ni]).type(torch.FloatTensor)
         
         sg_logits = sg_word_outputs.transpose(0, 1).contiguous() # -> batch x seq, torch.Size([10, 21, 9746])
         sg_target = cudalize(lyric_tensor[:,line_num,1:line_length].contiguous()) # -> batch x seq, torch.Size([10, 21])
