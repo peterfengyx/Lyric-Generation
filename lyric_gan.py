@@ -7,12 +7,18 @@ from tensorboardX import SummaryWriter
 
 import torch.utils.data as data_utils
 from torch.autograd import grad
+import sys
+import os
 
 # input from command line
-# LgEndLossWeight = 5 # 10
-# SgWordLossWeight = 1
-SavingDir = "."
+if len(sys.argv) != 3:
+    raise ValueError("Wrong argument number!")
+
+BatchSize = int(sys.argv[1]) # 20
+SavingDir = sys.argv[2]
 LearningRate = 0.0001
+
+print ('BatchSize: ', BatchSize, ' SavingDir: ', SavingDir)
 # --------------------------- Load Data ---------------------------
 train_set = pickle.load(open('data_new/training_012','rb'))
 val_set = pickle.load(open('data_new/valid_012','rb'))
@@ -196,15 +202,10 @@ def train_val(model_type,
 
             sg_output_softmax = softmax(sg_output)
 
-            # sampling, need that motimodel stuff
-            pdb.set_trace()
-            prob = sg_output_softmax.view(-1).cpu().data.numpy()
-            ni = np.random.choice(DictionarySize, 1, p=prob)
-            
+            ni = torch.multinomial(sg_output_softmax, 1).cpu().view(-1)
             # _, topi = sg_output_softmax.topk(1)
             # ni = topi.cpu().view(-1) # workable, but be careful
             sg_word_tensor = torch.from_numpy(word_embedding[ni]).type(torch.FloatTensor)
-
             # eos_ni = ni.numpy()
             eos_ni = ni
             # be careful about <SOS>!!!!!!
@@ -446,40 +447,40 @@ if __name__=='__main__':
     title_embedding_size = TitleSize
     genre_embedding_size = GenreSize
 
-    lyric_latent_size = 512
+    lyric_latent_size = 128
     # lyric generator - lg
     lg_input_size = lyric_latent_size + title_embedding_size + genre_embedding_size
-    lg_embedding_size = 300
-    lg_hidden_size = 300 # 512
-    lg_topic_latent_size = 300 # 512
-    lg_topic_output_size = 300 # 512
+    lg_embedding_size = 128 # not used
+    lg_hidden_size = 128 # 512
+    lg_topic_latent_size = 128 # 512
+    lg_topic_output_size = 128 # 512
     lyric_generator = LyricGenerator(lg_input_size, lg_embedding_size, lg_hidden_size, lg_topic_latent_size, lg_topic_output_size)
-    lyric_generator = cudalize(lyric_generator)
     # need to load the weights
+    lyric_generator = cudalize(lyric_generator)
     lyric_generator.train()
 
     # sentence generator - sg
     sg_input_size = word_embedding_size + title_embedding_size + genre_embedding_size
-    sg_embedding_size = 300
-    sg_hidden_size = 300 # 512
+    sg_embedding_size = 128
+    sg_hidden_size = lg_topic_output_size # 512
     sg_output_size = DictionarySize
     sentence_generator = SentenceGenerator(sg_input_size, sg_embedding_size, sg_hidden_size, sg_output_size)
-    sentence_generator = cudalize(sentence_generator)
     # need to load the weights
+    sentence_generator = cudalize(sentence_generator)
     sentence_generator.train()
 
     # sentence encoder - se
     se_input_size = word_embedding_size + title_embedding_size + genre_embedding_size
-    se_embedding_size = 300
-    se_hidden_size = 300 # 512
+    se_embedding_size = 128
+    se_hidden_size = 128 # 512
     sentence_encoder = SentenceEncoder(se_input_size, se_embedding_size, se_hidden_size)
-    sentence_encoder = cudalize(sentence_encoder)
     # need to load the weights
+    sentence_encoder = cudalize(sentence_encoder)
     sentence_encoder.train()
 
     # lyric encoder - le
     le_input_size = se_hidden_size + title_embedding_size + genre_embedding_size
-    le_embedding_size = 300
+    le_embedding_size = 128 # not used
     le_hidden_size = lyric_latent_size
     lyric_encoder = LyricEncoder(le_input_size, le_embedding_size, le_hidden_size)
     lyric_encoder = cudalize(lyric_encoder)
@@ -492,7 +493,7 @@ if __name__=='__main__':
     lyric_discriminator = cudalize(lyric_discriminator)
     lyric_discriminator.train()
 
-    batch_size = 10 # 20
+    batch_size = BatchSize # 20
     learning_rate = LearningRate
     num_epoch = 500
     print_every = 1

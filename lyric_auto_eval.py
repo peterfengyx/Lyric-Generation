@@ -6,9 +6,9 @@ import numpy as np
 import torch.utils.data as data_utils
 from gensim import corpora
 # --------------------------- Load Data ---------------------------
-train_set = pickle.load(open('data/training_012','rb'))
-val_set = pickle.load(open('data/valid_012','rb'))
-test_set = pickle.load(open('data/test_012','rb'))
+train_set = pickle.load(open('data_new/training_012','rb'))
+val_set = pickle.load(open('data_new/valid_012','rb'))
+test_set = pickle.load(open('data_new/test_012','rb'))
 #--------------------------- Meta Data ---------------------------
 # special token idx
 SOS = 9744
@@ -25,10 +25,10 @@ GenreSize = 3
 TitleSize = 300
 #----------------------------------------------------------------
 word_embedding = np.eye(DictionarySize)
-title_embedding = pickle.load(open('data/w2v_embedding.pkl','rb'))
+title_embedding = pickle.load(open('data_new/w2v_embedding.pkl','rb'))
 genre_embedding = torch.eye(GenreSize)
 line_end_embedding = torch.eye(MaxLineNum).type(torch.LongTensor)
-idx2word = corpora.Dictionary.load('data/dict.txt')
+idx2word = corpora.Dictionary.load('data_new/dict.txt')
 #########################################################################
 
 class LyricDataset(data_utils.Dataset):
@@ -226,15 +226,15 @@ def trainGenerate(d_set, sentence_encoder, lyric_encoder, lyric_generator, sente
         pdb.set_trace()
 
 #########################################################################
-
+'''
 # for the 128 model
 word_embedding_size = DictionarySize
 title_embedding_size = TitleSize
 genre_embedding_size = GenreSize
 
-d_set = test_set
-saving_dir = "model_autoencoder_128_30"
-epoch_num = 7
+d_set = val_set
+saving_dir = "tf_autoencoder_128_30_01"
+epoch_num = 9
 
 batch_size = 1
 # sentence encoder - se
@@ -284,8 +284,8 @@ title_embedding_size = TitleSize
 genre_embedding_size = GenreSize
 
 d_set = val_set
-saving_dir = "model_autoencoder_256_20_5"
-epoch_num = 1
+saving_dir = "tf_autoencoder_256_25_1"
+epoch_num = 14
 
 batch_size = 1
 # sentence encoder - se
@@ -328,4 +328,3 @@ sentence_generator = cudalize(sentence_generator)
 sentence_generator.eval()
 
 trainGenerate(d_set, sentence_encoder, lyric_encoder, lyric_generator, sentence_generator, batch_size)
-'''

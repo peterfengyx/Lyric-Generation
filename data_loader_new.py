@@ -88,7 +88,31 @@ class DataLoader:
                 t[i[1]] += 1
             except:
                 t[i[1]] = 1
-        return t
+        print (t)
+        
+        t_train={}
+        for i in self.tn_set:
+            try:
+                t_train[i[1]] += 1
+            except:
+                t_train[i[1]] = 1
+        print (t_train)
+
+        t_val={}
+        for i in self.va_set:
+            try:
+                t_val[i[1]] += 1
+            except:
+                t_val[i[1]] = 1
+        print (t_val)
+
+        t_test={}
+        for i in self.tt_set:
+            try:
+                t_test[i[1]] += 1
+            except:
+                t_test[i[1]] = 1
+        print (t_test)
 
 dd = DataLoader()
 pdb.set_trace()
