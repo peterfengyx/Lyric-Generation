@@ -19,6 +19,9 @@ SavingDir = sys.argv[2]
 LearningRate = 0.0001
 
 print ('BatchSize: ', BatchSize, ' SavingDir: ', SavingDir)
+
+if not os.path.exists(SavingDir):
+    os.makedirs(SavingDir)
 # --------------------------- Load Data ---------------------------
 train_set = pickle.load(open('data_new/training_012','rb'))
 val_set = pickle.load(open('data_new/valid_012','rb'))
@@ -49,7 +52,7 @@ title_embedding = pickle.load(open('data_new/w2v_embedding.pkl','rb'))
 genre_embedding = torch.eye(GenreSize)
 line_end_embedding = torch.eye(MaxLineNum).type(torch.LongTensor)
 #----------------------------------------------------------------
-# writer = SummaryWriter()
+writer = SummaryWriter()
 
 class LyricDataset(data_utils.Dataset):
     def __init__(self, lyric_set, max_line_num = MaxLineNum):
@@ -284,9 +287,9 @@ def train_val(model_type,
 
         sentence_encoder_optimizer.zero_grad()
         lyric_encoder_optimizer.zero_grad()
+        lyric_generator_optimizer.zero_grad()
+        sentence_generator_optimizer.zero_grad()
         lyric_discriminator_optimizer.zero_grad()
-        lyric_generator_optimizer.step()
-        sentence_generator_optimizer.step()
     
     if model_type == 'train':
         generator_loss.backward()
@@ -310,10 +313,10 @@ def trainEpochs(sentence_encoder,
                 num_epoch, 
                 print_every,
                 saving_dir = SavingDir):
-    sentence_encoder_optimizer = torch.optim.Adam(sentence_encoder.parameters(), lr=learning_rate)
-    lyric_encoder_optimizer = torch.optim.Adam(lyric_encoder.parameters(), lr=learning_rate)
-    lyric_generator_optimizer = torch.optim.Adam(lyric_generator.parameters(), lr=learning_rate)
-    sentence_generator_optimizer = torch.optim.Adam(sentence_generator.parameters(), lr=learning_rate)
+    sentence_encoder_optimizer = torch.optim.Adam(sentence_encoder.parameters(), lr=learning_rate*0.95)
+    lyric_encoder_optimizer = torch.optim.Adam(lyric_encoder.parameters(), lr=learning_rate*0.95)
+    lyric_generator_optimizer = torch.optim.Adam(lyric_generator.parameters(), lr=learning_rate*0.95)
+    sentence_generator_optimizer = torch.optim.Adam(sentence_generator.parameters(), lr=learning_rate*0.95)
     lyric_discriminator_optimizer = torch.optim.Adam(lyric_discriminator.parameters(), lr=learning_rate)
 
     train_loader = data_utils.DataLoader(dataset=LyricDataset(train_set),
@@ -435,22 +438,25 @@ def trainEpochs(sentence_encoder,
         print('        Validation loss: [%.6f, %.6f, %.6f]' % (print_loss_gan_avg_val, print_loss_gene_avg_val, print_loss_disc_avg_val))
         
         # write to tensorboard
-        # iter_epoch += 1
-        # writer.add_scalars(saving_dir+'/gan_loss/train_val_epoch', {'train': print_loss_gan_avg_train, 'val': print_loss_gan_avg_val}, iter_epoch)
-        # writer.add_scalars(saving_dir+'/gene_loss/train_val_epoch', {'train': print_loss_gene_avg_train, 'val': print_loss_gene_avg_val}, iter_epoch)
-        # writer.add_scalars(saving_dir+'/disc_loss/train_val_epoch', {'train': print_loss_disc_avg_train, 'val': print_loss_disc_avg_val}, iter_epoch)
+        iter_epoch += 1
+        writer.add_scalars(saving_dir+'/gan_loss/train_val_epoch', {'train': print_loss_gan_avg_train, 'val': print_loss_gan_avg_val}, iter_epoch)
+        writer.add_scalars(saving_dir+'/gene_loss/train_val_epoch', {'train': print_loss_gene_avg_train, 'val': print_loss_gene_avg_val}, iter_epoch)
+        writer.add_scalars(saving_dir+'/disc_loss/train_val_epoch', {'train': print_loss_disc_avg_train, 'val': print_loss_disc_avg_val}, iter_epoch)
 
         # save models    
-        # torch.save(sentence_encoder.state_dict(), saving_dir+'/sentence_encoder_'+str(epoch+1))
-        # torch.save(lyric_encoder.state_dict(), saving_dir+'/lyric_encoder_'+str(epoch+1))
-        # torch.save(lyric_generator.state_dict(), saving_dir+'/lyric_generator_'+str(epoch+1))
-        # torch.save(sentence_generator.state_dict(), saving_dir+'/sentence_generator_'+str(epoch+1))
-        # torch.save(lyric_discriminator.state_dict(), saving_dir+'/lyric_discriminator_'+str(epoch+1))
+        torch.save(sentence_encoder.state_dict(), saving_dir+'/sentence_encoder_'+str(epoch+1))
+        torch.save(lyric_encoder.state_dict(), saving_dir+'/lyric_encoder_'+str(epoch+1))
+        torch.save(lyric_generator.state_dict(), saving_dir+'/lyric_generator_'+str(epoch+1))
+        torch.save(sentence_generator.state_dict(), saving_dir+'/sentence_generator_'+str(epoch+1))
+        torch.save(lyric_discriminator.state_dict(), saving_dir+'/lyric_discriminator_'+str(epoch+1))
         
 if __name__=='__main__':
     word_embedding_size = DictionarySize
     title_embedding_size = TitleSize
     genre_embedding_size = GenreSize
+
+    saving_dir_1 = "tf_autoencoder_128_30_01"
+    epoch_num_1 = 20
 
     lyric_latent_size = 128
     # lyric generator - lg
@@ -461,6 +467,7 @@ if __name__=='__main__':
     lg_topic_output_size = 128 # 512
     lyric_generator = LyricGenerator(lg_input_size, lg_embedding_size, lg_hidden_size, lg_topic_latent_size, lg_topic_output_size)
     # need to load the weights
+    lyric_generator.load_state_dict(torch.load(saving_dir_1+'/lyric_generator_'+str(epoch_num_1)))
     lyric_generator = cudalize(lyric_generator)
     lyric_generator.train()
 
@@ -471,6 +478,7 @@ if __name__=='__main__':
     sg_output_size = DictionarySize
     sentence_generator = SentenceGenerator(sg_input_size, sg_embedding_size, sg_hidden_size, sg_output_size)
     # need to load the weights
+    sentence_generator.load_state_dict(torch.load(saving_dir_1+'/sentence_generator_'+str(epoch_num_1)))
     sentence_generator = cudalize(sentence_generator)
     sentence_generator.train()
 
@@ -480,6 +488,7 @@ if __name__=='__main__':
     se_hidden_size = 128 # 512
     sentence_encoder = SentenceEncoder(se_input_size, se_embedding_size, se_hidden_size)
     # need to load the weights
+    sentence_encoder.load_state_dict(torch.load(saving_dir_1+'/sentence_encoder_'+str(epoch_num_1)))
     sentence_encoder = cudalize(sentence_encoder)
     sentence_encoder.train()
 
@@ -488,8 +497,9 @@ if __name__=='__main__':
     le_embedding_size = 128 # not used
     le_hidden_size = lyric_latent_size
     lyric_encoder = LyricEncoder(le_input_size, le_embedding_size, le_hidden_size)
-    lyric_encoder = cudalize(lyric_encoder)
     # need to load the weights
+    lyric_encoder.load_state_dict(torch.load(saving_dir_1+'/lyric_encoder_'+str(epoch_num_1)))
+    lyric_encoder = cudalize(lyric_encoder)
     lyric_encoder.train()
 
     # lyric discriminator - ldis
@@ -504,4 +514,4 @@ if __name__=='__main__':
     print_every = 1
     
     trainEpochs(sentence_encoder, lyric_encoder, lyric_generator, sentence_generator, lyric_discriminator, batch_size, learning_rate, num_epoch, print_every)
-    # writer.close()
+    writer.close()
