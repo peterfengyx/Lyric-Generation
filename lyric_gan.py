@@ -2,7 +2,7 @@ import pdb
 from lyric_models import *
 import pickle
 import numpy as np
-from gensim import corpora
+# from gensim import corpora
 from tensorboardX import SummaryWriter
 
 import torch.utils.data as data_utils
@@ -206,8 +206,8 @@ def train_val(model_type,
             # _, topi = sg_output_softmax.topk(1)
             # ni = topi.cpu().view(-1) # workable, but be careful
             sg_word_tensor = torch.from_numpy(word_embedding[ni]).type(torch.FloatTensor)
-            # eos_ni = ni.numpy()
-            eos_ni = ni
+            
+            eos_ni = ni.numpy()
             # be careful about <SOS>!!!!!!
             eos_batch_index = np.where(eos_ni == EOS)[0]
             if np.sum(sg_length_flag[eos_batch_index]) > 0:
@@ -258,6 +258,9 @@ def train_val(model_type,
     discriminator_loss = D_real_loss + D_fake_loss + gradient_penalty
     discriminator_loss_data = discriminator_loss.item()
 
+    # Normal: backward here
+    # Normal: generate lyric again here
+
     # if model_type == "train":
     #     discriminator_loss.backward(retain_graph=True)
     #     sentence_encoder_optimizer.step()
@@ -282,6 +285,8 @@ def train_val(model_type,
         sentence_encoder_optimizer.zero_grad()
         lyric_encoder_optimizer.zero_grad()
         lyric_discriminator_optimizer.zero_grad()
+        lyric_generator_optimizer.step()
+        sentence_generator_optimizer.step()
     
     if model_type == 'train':
         generator_loss.backward()
@@ -495,7 +500,7 @@ if __name__=='__main__':
 
     batch_size = BatchSize # 20
     learning_rate = LearningRate
-    num_epoch = 500
+    num_epoch = 1000
     print_every = 1
     
     trainEpochs(sentence_encoder, lyric_encoder, lyric_generator, sentence_generator, lyric_discriminator, batch_size, learning_rate, num_epoch, print_every)
