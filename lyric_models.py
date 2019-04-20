@@ -120,6 +120,27 @@ class LyricDiscriminator(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
+class LyricClassifier(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(LyricClassifier, self).__init__()
+        latent_size = input_size//2
+        self.fc_1 = nn.Linear(input_size, latent_size)
+        self.relu_1 = nn.ReLU()
+        self.fc_2 = nn.Linear(latent_size, output_size)
+        # self.sigmoid = nn.Sigmoid()
+
+    def forward(self, input):
+        output = self.relu_1(self.fc_1(input))
+        # output = self.sigmoid(self.fc_2(output))
+        output = self.fc_2(output)
+        return output
+    
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                m.weight.data.normal_(0, 0.01)
+                m.bias.data.zero_()
+
 # ------------------------------------------------------------------------------
 # masked_cross_entropy
 # The following code is downloaded from
