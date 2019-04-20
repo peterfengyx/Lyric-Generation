@@ -44,10 +44,10 @@ TitleSize = 300
 # idx2vec = pickle.load(open('data_new/w2v.pkl','rb'))
 word_embedding = np.eye(DictionarySize)
 title_embedding = pickle.load(open('data_new/w2v_embedding.pkl','rb'))
-genre_embedding = torch.eye(GenreSize)
-line_end_embedding = torch.eye(MaxLineNum).type(torch.LongTensor)
+# genre_embedding = torch.eye(GenreSize)
+# line_end_embedding = torch.eye(MaxLineNum).type(torch.LongTensor)
 
-# writer = SummaryWriter()
+writer = SummaryWriter()
 #----------------------------------------------------------------
 class LyricDataset(data_utils.Dataset):
     def __init__(self, lyric_set, max_line_num = MaxLineNum):
@@ -95,9 +95,7 @@ def train_val(model_type,
         lyric_encoder_optimizer.zero_grad()
         lyric_classifier_optimizer.zero_grad()
     
-    auto_loss_data = 0.0
-    sg_word_loss_data = 0.0
-    lg_end_loss_data = 0.0
+    class_loss_data = 0.0
 
     line_number = torch.max(line_num_tensor).item()
     line_length = torch.max(line_length_tensor).item()
@@ -124,22 +122,17 @@ def train_val(model_type,
     lyric_un_latent_variable = le_hiddens_variable[line_num_tensor, np.arange(batch_size), :] # torch.Size([10, 512])
 
     predicted_genre = lyric_classifier(lyric_un_latent_variable)
-    genre_embedding_tensor = cudalize(genre_embedding[genre_tensor])
+    class_loss = cross_entropy_loss(predicted_genre, cudalize(genre_tensor))
+    class_loss_data = class_loss.item()
 
-    # this line has bug
-    classification_loss = cross_entropy_loss(predicted_genre, genre_tensor)
+    if model_type == 'train':
+        class_loss.backward()
 
-    pdb.set_trace()
-
-    # if model_type == 'train':
-    #     # auto_loss.backward()
-    #     sentence_encoder_optimizer.step()
-    #     lyric_encoder_optimizer.step()
-    #     lyric_classifier_optimizer
-        
+        sentence_encoder_optimizer.step()
+        lyric_encoder_optimizer.step()
+        lyric_classifier_optimizer.step()
     
-    # print(auto_loss_data, sg_word_loss_data, lg_end_loss_data)
-    return auto_loss_data, sg_word_loss_data, lg_end_loss_data
+    return class_loss_data
 
 def trainEpochs(sentence_encoder, 
                 lyric_encoder, 
@@ -167,12 +160,8 @@ def trainEpochs(sentence_encoder,
         lyric_encoder.train()
         lyric_classifier.train()
 
-        print_loss_total_auto = 0.0  # Reset every print_every
-        print_loss_total_auto_list = []
-        print_loss_total_word = 0.0  # Reset every print_every
-        print_loss_total_word_list = []
-        print_loss_total_end = 0.0  # Reset every print_every
-        print_loss_total_end_list = []
+        print_loss_total_class = 0.0  # Reset every print_every
+        print_loss_total_class_list = []
 
         for batch, data in enumerate(train_loader, 0):
             # title_tensor = data['title'].type(torch.FloatTensor) # torch.Size([10, 9746])
@@ -181,56 +170,40 @@ def trainEpochs(sentence_encoder,
             line_length_tensor = data['line_length'] # torch.Size([10, 40])
             line_num_tensor = data['line_numb'] # torch.Size([10]), tensor([40, 17, 31, 38, 40, 40, 22,  9, 12, 39])
 
-            # pdb.set_trace()
-
             # print(batch)
-            auto_loss, word_loss, end_loss = train_val('train',
-                                                       genre_tensor,
-                                                       lyric_tensor,
-                                                       line_length_tensor,
-                                                       line_num_tensor,
-                                                       sentence_encoder,
-                                                       lyric_encoder,
-                                                       lyric_classifier,
-                                                       sentence_encoder_optimizer,
-                                                       lyric_encoder_optimizer,
-                                                       lyric_classifier_optimizer,
-                                                       cross_entropy_loss,
-                                                       len(line_num_tensor))
+            class_loss = train_val('train',
+                                   genre_tensor,
+                                   lyric_tensor,
+                                   line_length_tensor,
+                                   line_num_tensor,
+                                   sentence_encoder,
+                                   lyric_encoder,
+                                   lyric_classifier,
+                                   sentence_encoder_optimizer,
+                                   lyric_encoder_optimizer,
+                                   lyric_classifier_optimizer,
+                                   cross_entropy_loss,
+                                   len(line_num_tensor))
         
-            print_loss_total_auto += auto_loss
-            print_loss_total_auto_list.append(auto_loss)
-            print_loss_total_word += word_loss
-            print_loss_total_word_list.append(word_loss)
-            print_loss_total_end += end_loss
-            print_loss_total_end_list.append(end_loss)
+            print_loss_total_class += class_loss
+            print_loss_total_class_list.append(class_loss)
 
             if batch % print_every == (print_every-1):
-                print_loss_avg_auto = print_loss_total_auto / print_every
-                print_loss_total_auto = 0.0
+                print_loss_avg_class = print_loss_total_class / print_every
+                print_loss_total_class = 0.0
 
-                print_loss_avg_word = print_loss_total_word / print_every
-                print_loss_total_word = 0.0
-
-                print_loss_avg_end = print_loss_total_end / print_every
-                print_loss_total_end = 0.0
-
-                print('[%d, %d]  [%.6f, %.6f, %.6f]' % (epoch+1, batch+1, print_loss_avg_auto, print_loss_avg_word, print_loss_avg_end))
+                print('[%d, %d]  [%.6f]' % (epoch+1, batch+1, print_loss_avg_class))
             
-        print_loss_auto_avg_train = np.mean(np.array(print_loss_total_auto_list))
-        print_loss_word_avg_train = np.mean(np.array(print_loss_total_word_list))
-        print_loss_end_avg_train = np.mean(np.array(print_loss_total_end_list))
+        print_loss_class_avg_train = np.mean(np.array(print_loss_total_class_list))
 
-        print('Train loss: [%.6f, %.6f, %6f]' % (print_loss_auto_avg_train, print_loss_word_avg_train, print_loss_end_avg_train))
+        print('Train loss: [%.6f, %.6f, %6f]' % (print_loss_class_avg_train))
 
         # validation
         sentence_encoder.eval()
         lyric_encoder.eval()
         lyric_classifier.eval()
         
-        validation_loss_auto_list = []
-        validation_loss_word_list = []
-        validation_loss_end_list = []
+        validation_loss_class_list = []
 
         for _, val_data in enumerate(val_loader, 0):
             # title_tensor = val_data['title'].type(torch.FloatTensor) # torch.Size([10, 9746])
@@ -239,35 +212,30 @@ def trainEpochs(sentence_encoder,
             line_length_tensor = val_data['line_length'] # torch.Size([10, 40])
             line_num_tensor = val_data['line_numb'] # torch.Size([10]), tensor([40, 17, 31, 38, 40, 40, 22,  9, 12, 39])
 
-            auto_loss, word_loss, end_loss = train_val('val',
-                                                       genre_tensor,
-                                                       lyric_tensor,
-                                                       line_length_tensor,
-                                                       line_num_tensor,
-                                                       sentence_encoder,
-                                                       lyric_encoder,
-                                                       lyric_classifier,
-                                                       sentence_encoder_optimizer,
-                                                       lyric_encoder_optimizer,
-                                                       lyric_classifier_optimizer,
-                                                       cross_entropy_loss,
-                                                       len(line_num_tensor))
-            validation_loss_auto_list.append(auto_loss)
-            validation_loss_word_list.append(word_loss)
-            validation_loss_end_list.append(end_loss)
-        
-        print_loss_auto_avg_val = np.mean(np.array(validation_loss_auto_list))
-        print_loss_word_avg_val = np.mean(np.array(validation_loss_word_list))
-        print_loss_end_avg_val = np.mean(np.array(validation_loss_end_list))
+            class_loss = train_val('val',
+                                   genre_tensor,
+                                   lyric_tensor,
+                                   line_length_tensor,
+                                   line_num_tensor,
+                                   sentence_encoder,
+                                   lyric_encoder,
+                                   lyric_classifier,
+                                   sentence_encoder_optimizer,
+                                   lyric_encoder_optimizer,
+                                   lyric_classifier_optimizer,
+                                   cross_entropy_loss,
+                                   len(line_num_tensor))
 
-        print('        Validation loss: [%.6f, %.6f, %.6f]' % (print_loss_auto_avg_val, print_loss_word_avg_val, print_loss_end_avg_val))
+            validation_loss_class_list.append(class_loss)
         
-        # # write to tensorboard
-        # iter_epoch += 1
-        # writer.add_scalars(saving_dir+'/auto_loss/train_val_epoch', {'train': print_loss_auto_avg_train, 'val': print_loss_auto_avg_val}, iter_epoch)
-        # writer.add_scalars(saving_dir+'/word_loss/train_val_epoch', {'train': print_loss_word_avg_train, 'val': print_loss_word_avg_val}, iter_epoch)
-        # writer.add_scalars(saving_dir+'/end_loss/train_val_epoch', {'train': print_loss_end_avg_train, 'val': print_loss_end_avg_val}, iter_epoch)
+        print_loss_class_avg_val = np.mean(np.array(validation_loss_class_list))
 
+        print('        Validation loss: [%.6f]' % (print_loss_class_avg_val))
+        
+        # write to tensorboard
+        iter_epoch += 1
+        writer.add_scalars(saving_dir+'/class_loss/train_val_epoch', {'train': print_loss_class_avg_train, 'val': print_loss_class_avg_val}, iter_epoch)
+        
         # # save models    
         # torch.save(sentence_encoder.state_dict(), saving_dir+'/sentence_encoder_'+str(epoch+1))
         # torch.save(lyric_encoder.state_dict(), saving_dir+'/lyric_encoder_'+str(epoch+1))
@@ -303,8 +271,8 @@ if __name__=='__main__':
 
     batch_size = BatchSize # 20 # 20
     learning_rate = LearningRate
-    num_epoch = 500
+    num_epoch = 5000
     print_every = 1
     
     trainEpochs(sentence_encoder, lyric_encoder, lyric_classifier, batch_size, learning_rate, num_epoch, print_every)
-    # writer.close()
+    writer.close()
