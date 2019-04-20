@@ -196,7 +196,7 @@ def trainEpochs(sentence_encoder,
             
         print_loss_class_avg_train = np.mean(np.array(print_loss_total_class_list))
 
-        print('Train loss: [%.6f, %.6f, %6f]' % (print_loss_class_avg_train))
+        print('Train loss: [%.6f]' % (print_loss_class_avg_train))
 
         # validation
         sentence_encoder.eval()
