@@ -146,6 +146,101 @@ def lyric_generate(title_tensor,
     print ('Generated Line Number: ', lg_outputs_length[0])
     print_lyric(generated_lyric_list)
 
+
+def lyric_generate_1(title_tensor,
+                    genre_tensor,
+                    lyric_tensor,
+                    line_length_tensor,
+                    line_num_tensor,
+                    sentence_encoder, # se
+                    lyric_encoder, # le
+                    lyric_generator, # lg
+                    sentence_generator, # sg
+                    batch_size,
+                    lyric_embedding_size,
+                    max_line_number = MaxLineNum,
+                    max_line_length = MaxLineLen):
+    
+    genre_embedding_tensor = genre_embedding[genre_tensor]
+
+    noise_un_variable = cudalize(Variable(torch.randn((batch_size, lyric_embedding_size)))) # torch.Size([10, 512])
+    # normalize
+    noise_mean_variable = torch.mean(noise_un_variable, dim=1, keepdim=True)
+    noise_std_variable = torch.std(noise_un_variable, dim=1, keepdim=True)
+    noise_variable = (noise_un_variable - noise_mean_variable)/noise_std_variable
+
+    softmax = nn.Softmax(dim=1)
+    lg_hidden = cudalize(Variable(lyric_generator.initHidden(batch_size))) # torch.Size([1, 10, 512])
+
+    lg_outputs_length = np.array([max_line_number]*batch_size) # (10,)
+    lg_length_flag = np.ones(batch_size, dtype=int) # (10,)
+
+    generated_lyric_list = []
+    # generated_line_num = 0
+
+    lg_temp_variable = noise_variable
+
+    for line_num in range(max_line_number):
+        lg_title_tensor_variable = cudalize(Variable(title_tensor)) # torch.Size([10, 9746])
+        lg_genre_variable = cudalize(Variable(genre_embedding_tensor)) # torch.Size([10, 3])
+        lg_input = torch.cat((lg_temp_variable, lg_title_tensor_variable, lg_genre_variable), 1) # torch.Size([10, 10261])
+
+        end_output, topic_output, lg_hidden = lyric_generator(lg_input, lg_hidden, batch_size)
+
+        # workable, but be careful! Now p = 0.5, need to change for other p-s!
+        end_output_softmax = softmax(end_output)
+        end_ni = np.argmax(end_output_softmax.data.cpu().numpy(), axis=1)
+
+        end_batch_index = np.where(end_ni == 1)[0]
+        if np.sum(lg_length_flag[end_batch_index]) > 0:
+            lg_outputs_length[end_batch_index] = line_num + 1 # line_num starts from 0!
+            lg_length_flag[end_batch_index] = 0
+        
+        sg_hidden = topic_output.view(1, batch_size, -1) # torch.Size([1, 10, 512])
+        sg_hiddens_variable = sg_hidden
+
+        sg_word_tensor = torch.from_numpy(np.array([word_embedding[SOS]]*batch_size)).type(torch.FloatTensor) # torch.Size([10, 9746])
+
+        sg_outputs_length = np.array([max_line_length-1]*batch_size)
+        sg_length_flag = np.ones(batch_size, dtype=int)
+
+        generated_line_list = []
+        for line_idx in range(1, max_line_length):
+            # title_tensor - this line
+            # genre_embedding_tensor - this line, torch.Size([10, 3])
+            sg_input = torch.cat((sg_word_tensor, title_tensor, genre_embedding_tensor), 1) # torch.Size([10, 19495])
+            sg_input = cudalize(Variable(sg_input))
+
+            sg_output, sg_hidden = sentence_generator(sg_input, sg_hidden, batch_size)
+
+            sg_hiddens_variable = torch.cat((sg_hiddens_variable, sg_hidden))
+
+            sg_output_softmax = softmax(sg_output)
+
+            ni = torch.multinomial(sg_output_softmax, 1).cpu().view(-1)
+            # _, topi = sg_output_softmax.topk(1)
+            # ni = topi.cpu().view(-1) # workable, but be careful
+            sg_word_tensor = torch.from_numpy(word_embedding[ni]).type(torch.FloatTensor)
+
+            sg_word_tensor = sg_word_tensor.view(1, -1)
+            generated_line_list.append(ni.item())
+            
+            eos_ni = ni.numpy()
+            # be careful about <SOS>!!!!!!
+            eos_batch_index = np.where(eos_ni == EOS)[0]
+            if np.sum(sg_length_flag[eos_batch_index]) > 0:
+                sg_outputs_length[eos_batch_index] = line_idx # exclude <SOS>, but include <EOS>
+                sg_length_flag[eos_batch_index] = 0
+        
+        lg_temp_variable = sg_hiddens_variable[sg_outputs_length, np.arange(batch_size), :]
+
+        generated_lyric_list.append(generated_line_list[:sg_outputs_length[0]])
+    # pdb.set_trace()
+    
+    print ("----Generated Lyric--------------------------------------")
+    print ('Generated Line Number: ', lg_outputs_length[0])
+    print_lyric(generated_lyric_list)
+
 #########################################################################
 
 # only works for  batch size = 1 !!!
@@ -192,7 +287,7 @@ def trainGenerate(d_set, sentence_encoder, lyric_encoder, lyric_generator, sente
         # print_lyric(lyric_tensor[0][:line_num_tensor].tolist())
         print_lyric(generated_lyric_list)
 
-        lyric_generate(title_tensor,
+        lyric_generate_1(title_tensor,
                        genre_tensor,
                        lyric_tensor,
                        line_length_tensor,
@@ -207,15 +302,19 @@ def trainGenerate(d_set, sentence_encoder, lyric_encoder, lyric_generator, sente
         pdb.set_trace()
 
 #########################################################################
-'''
+
 # for the 128 model
 word_embedding_size = DictionarySize
 title_embedding_size = TitleSize
 genre_embedding_size = GenreSize
 
-d_set = val_set
+d_set = test_set
 saving_dir = "tf_autoencoder_128_30_01"
-epoch_num = 9
+epoch_num = 20
+# saving_dir = "tf_autoencoder_nounk_128_1"
+# epoch_num = 15
+# saving_dir = "tf_autoencoder_nounk_128_25_01"
+# epoch_num = 14
 
 batch_size = 1
 # sentence encoder - se
@@ -265,7 +364,7 @@ title_embedding_size = TitleSize
 genre_embedding_size = GenreSize
 
 d_set = test_set
-saving_dir = "tf_autoencoder_256_25_1"
+saving_dir = "tf_autoencoder_256_30_01"
 epoch_num = 14
 
 batch_size = 1
@@ -309,3 +408,4 @@ sentence_generator = cudalize(sentence_generator)
 sentence_generator.eval()
 
 trainGenerate(d_set, sentence_encoder, lyric_encoder, lyric_generator, sentence_generator, batch_size, le_hidden_size)
+'''
