@@ -120,6 +120,56 @@ class LyricDiscriminator(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
+class LyricDiscriminatorGAN(nn.Module):
+    def __init__(self, input_size):
+        super(LyricDiscriminatorGAN, self).__init__()
+        latent_size = input_size//2
+        self.fc_1 = nn.Linear(input_size, latent_size)
+        self.lrelu_1 = nn.LeakyReLU(0.01)
+        # self.fc_2 = nn.Linear(1024, 256)
+        # self.lrelu_2 = nn.LeakyReLU(0.01)
+        self.fc_3 = nn.Linear(latent_size, 1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, input):
+        output = self.lrelu_1(self.fc_1(input))
+        # output = elf.lrelu_2(self.fc_2(output))
+        output = self.sigmoid(self.fc_3(output))
+        # output = self.fc_3(output)
+        return output
+    
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                m.weight.data.normal_(0, 0.01)
+                m.bias.data.zero_()
+
+class LyricDiscriminatorACGAN(nn.Module):
+    def __init__(self, input_size, class_num):
+        super(LyricDiscriminatorACGAN, self).__init__()
+        latent_size = input_size//2
+        self.fc_1 = nn.Linear(input_size, latent_size)
+        self.lrelu_1 = nn.LeakyReLU(0.01)
+        # self.fc_2 = nn.Linear(1024, 256)
+        # self.lrelu_2 = nn.LeakyReLU(0.01)
+        self.fc_3 = nn.Linear(latent_size, 1)
+        self.sigmoid = nn.Sigmoid()
+        self.classifier = nn.Linear(latent_size, class_num)
+
+    def forward(self, input):
+        output_latent = self.lrelu_1(self.fc_1(input))
+        # output = elf.lrelu_2(self.fc_2(output))
+        output_score = self.sigmoid(self.fc_3(output_latent))
+        # output = self.fc_3(output)
+        output_class = self.classifier(output_latent)
+        return output_score, output_class
+    
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                m.weight.data.normal_(0, 0.01)
+                m.bias.data.zero_()
+
 class LyricClassifier(nn.Module):
     def __init__(self, input_size, output_size):
         super(LyricClassifier, self).__init__()
